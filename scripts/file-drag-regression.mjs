@@ -19,6 +19,7 @@ async function newPage(view) {
       stats: { files: 0, bytes: 0, meals: 0 },
     };
     let listener;
+    let globalFileDragListener;
     let outcome = 'success';
     let rejectPreparation = false;
     let holdExecution = false;
@@ -28,6 +29,7 @@ async function newPage(view) {
     window.shredder = {
       getState: async () => structuredClone(state),
       onState: next => { listener = next; return () => { listener = undefined; }; },
+      onGlobalFileDrag: next => { globalFileDragListener = next; return () => { globalFileDragListener = undefined; }; },
       prepareDrop: async files => {
         calls.prepare += 1;
         if (files.length !== 1 || files[0].name !== 'synthetic.txt') throw new Error('Only synthetic files are permitted in this regression.');
@@ -59,6 +61,7 @@ async function newPage(view) {
     window.fileDragTest = {
       snapshot: () => structuredClone({ state, calls }),
       setPreferences: patch => { state.preferences = { ...state.preferences, ...patch }; broadcast(); },
+      globalFileDrag: point => globalFileDragListener?.(point),
       setOutcome: next => { outcome = next; },
       rejectPreparation: () => { rejectPreparation = true; },
       holdExecution: () => { holdExecution = true; },
@@ -116,6 +119,11 @@ async function look(page) {
   });
 }
 
+async function globalFileDrag(page, point) {
+  await page.evaluate(point => window.fileDragTest.globalFileDrag(point), point);
+  await page.clock.runFor(16);
+}
+
 async function assertNoFileCalls(page) {
   assert.deepEqual(await page.evaluate(() => window.fileDragTest.snapshot().calls), { prepare: 0, execute: 0, choose: 0 },
     'Looking at or interacting with a pet must not call file APIs.');
@@ -124,6 +132,67 @@ async function assertNoFileCalls(page) {
 
 try {
   for (const view of ['main', 'pet']) {
+    await run(`${view}: every pet follows confirmed file drags beyond the window without drop readiness`, async page => {
+      await page.evaluate(() => window.fileDragTest.setPreferences({ reduceMotion: true }));
+      for (const theme of themes) {
+        await page.evaluate(theme => window.fileDragTest.setPreferences({ theme }), theme);
+        await globalFileDrag(page, { x: -1200, y: -900 });
+        assert.equal(await page.locator('#drop-zone').getAttribute('data-looking'), 'true', `${theme} should notice file drags outside the window.`);
+        const left = await look(page);
+        assert.ok(left.x < 0 && left.y < 0, `${theme} should look toward negative client coordinates.`);
+        await globalFileDrag(page, { x: 3200, y: 2200 });
+        const right = await look(page);
+        assert.ok(right.x > 0 && right.y > 0, `${theme} should look beyond the window bounds.`);
+        assert.notEqual(left.transform, right.transform, `${theme} must visibly follow a global file drag.`);
+        assert.notEqual(await page.locator('#drop-zone').getAttribute('data-tracking'), 'true', 'Global gaze must not light up the local drop target.');
+        assert.notEqual(await page.locator('#drop-zone').getAttribute('data-phase'), 'hover');
+        assert.notEqual((await page.locator('#speech').textContent()).trim(), 'stand by !');
+        await globalFileDrag(page, null);
+        assert.notEqual(await page.locator('#drop-zone').getAttribute('data-looking'), 'true');
+        assert.equal(await page.locator('#creature').evaluate(node => node.style.getPropertyValue('--look-x')), '');
+        await page.mouse.move(350, 400);
+        assert.notEqual(await page.locator('#drop-zone').getAttribute('data-looking'), 'true', 'Ordinary movement after a file drag must remain idle.');
+      }
+      await assertNoFileCalls(page);
+    }, view);
+
+    await run(`${view}: leaving or blurring clears local readiness while global file gaze continues`, async page => {
+      await globalFileDrag(page, { x: -1200, y: -900 });
+      await drag(page, 'dragenter', { target: '#drop-zone' });
+      await expect(page.locator('#speech')).toHaveText('stand by !');
+      await drag(page, 'dragleave', { target: 'document' });
+      assert.equal(await page.locator('#drop-zone').getAttribute('data-looking'), 'true');
+      assert.notEqual(await page.locator('#drop-zone').getAttribute('data-phase'), 'hover');
+      assert.notEqual((await page.locator('#speech').textContent()).trim(), 'stand by !');
+      await drag(page, 'dragenter', { target: '#drop-zone' });
+      await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      assert.equal(await page.locator('#drop-zone').getAttribute('data-looking'), 'true');
+      assert.notEqual(await page.locator('#drop-zone').getAttribute('data-phase'), 'hover');
+      await globalFileDrag(page, { x: 3200, y: 2200 });
+      await page.clock.runFor(1000);
+      assert.equal(await page.locator('#drop-zone').getAttribute('data-looking'), 'true', 'A local drag expiry must not cancel an active global file drag.');
+      assert.ok((await look(page)).x > 0);
+      await drag(page, 'dragenter', { target: '#drop-zone' });
+      await globalFileDrag(page, null);
+      assert.notEqual(await page.locator('#drop-zone').getAttribute('data-looking'), 'true');
+      assert.notEqual(await page.locator('#drop-zone').getAttribute('data-tracking'), 'true');
+      assert.notEqual(await page.locator('#drop-zone').getAttribute('data-phase'), 'hover');
+      assert.notEqual((await page.locator('#speech').textContent()).trim(), 'stand by !');
+      await assertNoFileCalls(page);
+    }, view);
+
+    await run(`${view}: Escape ends global gaze until the native drag finishes`, async page => {
+      await globalFileDrag(page, { x: -1200, y: -900 });
+      assert.equal(await page.locator('#drop-zone').getAttribute('data-looking'), 'true');
+      await page.keyboard.press('Escape');
+      await globalFileDrag(page, { x: 3200, y: 2200 });
+      assert.notEqual(await page.locator('#drop-zone').getAttribute('data-looking'), 'true', 'A continuing native stream must not revive a cancelled drag.');
+      await globalFileDrag(page, null);
+      await globalFileDrag(page, { x: 3200, y: 2200 });
+      assert.equal(await page.locator('#drop-zone').getAttribute('data-looking'), 'true', 'The next file drag should be eligible for tracking.');
+      await assertNoFileCalls(page);
+    }, view);
+
     await run(`${view}: ordinary pointer movement and text drags never move the pet gaze`, async page => {
       for (const theme of themes) {
         await page.evaluate(theme => window.fileDragTest.setPreferences({ theme }), theme);
@@ -256,6 +325,29 @@ try {
     assert.equal(await page.locator('#drop-zone').getAttribute('data-phase'), 'success');
     assert.notEqual(await page.locator('#drop-zone').getAttribute('data-tracking'), 'true');
     assert.equal(await page.evaluate(() => window.fileDragTest.snapshot().state.stats.files), 1);
+  });
+
+  await run('native drag updates cannot redirect a pending shot or revive a dropped drag', async page => {
+    await page.evaluate(() => window.fileDragTest.holdExecution());
+    await globalFileDrag(page, { x: -1200, y: -900 });
+    await drag(page, 'dragenter', { target: '#drop-zone', x: 0.1, y: 0.2 });
+    await drag(page, 'drop', { target: '#drop-zone', x: 0.1, y: 0.2 });
+    await expect.poll(() => page.evaluate(() => window.fileDragTest.snapshot().calls.execute)).toBe(1);
+    const shot = await look(page);
+    await globalFileDrag(page, { x: 3200, y: 2200 });
+    assert.equal((await look(page)).facing, shot.facing, 'Native updates during file processing must preserve the shot direction.');
+    await globalFileDrag(page, null);
+    assert.equal((await look(page)).travel, shot.travel, 'A native drag end must preserve the pending shot pose.');
+    await globalFileDrag(page, { x: 3200, y: 2200 });
+    await page.evaluate(() => window.fileDragTest.releaseExecution());
+    await expect.poll(() => page.locator('#drop-zone').getAttribute('data-phase')).toBe('processing');
+    await page.clock.runFor(2000);
+    await globalFileDrag(page, { x: 3200, y: 2200 });
+    assert.notEqual(await page.locator('#drop-zone').getAttribute('data-looking'), 'true', 'The suppressed native drag must stay inactive after the shot completes.');
+    await globalFileDrag(page, null);
+    await globalFileDrag(page, { x: 3200, y: 2200 });
+    assert.equal(await page.locator('#drop-zone').getAttribute('data-looking'), 'true');
+    assert.deepEqual(await page.evaluate(() => window.fileDragTest.snapshot().calls), { prepare: 1, execute: 1, choose: 0 });
   });
 
   for (const outcome of ['rejected', 'cancelled', 'error']) {

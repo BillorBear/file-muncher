@@ -12,6 +12,7 @@ interface FileTrackingOptions {
 }
 
 export interface FileTracking {
+  trackGlobalFileDrag(point: PointerTarget | null): void;
   reset(): void;
   stop(): void;
 }
@@ -19,6 +20,8 @@ export interface FileTracking {
 export function bindFileTracking(options: FileTrackingOptions): FileTracking {
   const { zone, creature, isBusy, onHoverChange, onDrop } = options;
   let fileDragging = false;
+  let globalTarget: PointerTarget | null = null;
+  let globalSuppressed = false;
   let hovered = false;
   let facing: -1 | 1 = 1;
   let expiry: ReturnType<typeof setTimeout> | undefined;
@@ -34,14 +37,18 @@ export function bindFileTracking(options: FileTrackingOptions): FileTracking {
     delete zone.dataset.tracking;
     delete zone.dataset.looking;
     hover(false);
+    if (globalTarget) globalSuppressed = true;
   };
-  const reset = (): void => {
-    stop();
+  const resetPose = (): void => {
     if (isBusy()) return;
     facing = 1;
     for (const property of ['--aim-angle', '--turret-facing', '--tank-travel-y', '--look-x', '--look-y', '--look-tilt']) {
       creature.style.removeProperty(property);
     }
+  };
+  const reset = (): void => {
+    stop();
+    resetPose();
   };
   const aim = (point: PointerTarget): void => {
     if (isBusy() || zone.dataset.interacting || creature.dataset.dragging) return;
@@ -58,18 +65,40 @@ export function bindFileTracking(options: FileTrackingOptions): FileTracking {
     creature.style.setProperty('--look-tilt', `${gaze.tilt}deg`);
     zone.dataset.looking = 'true';
   };
+  const clearLocalTracking = (): void => {
+    clearTimeout(expiry);
+    fileDragging = false;
+    delete zone.dataset.tracking;
+    hover(false);
+    if (globalTarget && !globalSuppressed && !isBusy()) {
+      aim(globalTarget);
+    } else {
+      delete zone.dataset.looking;
+      resetPose();
+    }
+  };
+  const trackGlobalFileDrag = (point: PointerTarget | null): void => {
+    globalTarget = point;
+    if (!point) {
+      globalSuppressed = false;
+      reset();
+      return;
+    }
+    if (isBusy()) globalSuppressed = true;
+    if (!globalSuppressed) aim(point);
+  };
   const insideZone = (target: EventTarget | null): boolean => target instanceof Node && zone.contains(target);
   const trackFile = (event: DragEvent): void => {
     event.preventDefault();
     if (!event.dataTransfer?.types.includes('Files')) { reset(); return; }
-    if (isBusy()) { event.dataTransfer.dropEffect = 'none'; return; }
+    if (isBusy() || globalSuppressed) { event.dataTransfer.dropEffect = 'none'; return; }
     fileDragging = true;
     zone.dataset.tracking = 'true';
     aim({ x: event.clientX, y: event.clientY });
     hover(insideZone(event.target));
     event.dataTransfer.dropEffect = hovered ? 'copy' : 'none';
     clearTimeout(expiry);
-    expiry = setTimeout(reset, DRAG_EXPIRY_MS);
+    expiry = setTimeout(clearLocalTracking, DRAG_EXPIRY_MS);
   };
 
   document.addEventListener('dragenter', trackFile);
@@ -80,7 +109,7 @@ export function bindFileTracking(options: FileTrackingOptions): FileTracking {
       hover(insideZone(event.relatedTarget));
     } else if (event.target === document || event.target === document.documentElement ||
       event.clientX <= 0 || event.clientY <= 0 || event.clientX >= innerWidth || event.clientY >= innerHeight) {
-      reset();
+      clearLocalTracking();
     } else if (event.target === zone) {
       hover(false);
     }
@@ -90,6 +119,7 @@ export function bindFileTracking(options: FileTrackingOptions): FileTracking {
     const accepted = insideZone(event.target) && !isBusy();
     const files = [...(event.dataTransfer?.files ?? [])];
     if (accepted && files.length) {
+      aim({ x: event.clientX, y: event.clientY });
       stop();
       onDrop(files);
     } else reset();
@@ -97,8 +127,8 @@ export function bindFileTracking(options: FileTrackingOptions): FileTracking {
   document.addEventListener('dragend', reset);
   document.addEventListener('keydown', event => { if (event.key === 'Escape') reset(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
-  window.addEventListener('blur', reset);
+  window.addEventListener('blur', clearLocalTracking);
   window.addEventListener('pagehide', reset);
 
-  return { reset, stop };
+  return { trackGlobalFileDrag, reset, stop };
 }

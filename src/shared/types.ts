@@ -68,6 +68,7 @@ export interface DesktopApi {
   executeBatch(token: string): Promise<BatchResult>;
   updatePreferences(patch: Partial<Preferences>): Promise<AppState>;
   onState(listener: (state: AppState) => void): () => void;
+  onGlobalFileDrag(listener: (point: PointerTarget | null) => void): () => void;
   onPetSettingsDismissRequested(listener: (requestId: number) => void): () => void;
   openMain(): Promise<void>;
   openPetSettings(): Promise<void>;

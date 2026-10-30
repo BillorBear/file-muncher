@@ -3,12 +3,13 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, session, shell, Tray } from 'electron';
 import type { IpcMainEvent, IpcMainInvokeEvent, NativeImage } from 'electron';
-import type { AppState, BatchResult, Preferences, PreparedBatch } from '../shared/types';
+import type { AppState, BatchResult, PointerTarget, Preferences, PreparedBatch } from '../shared/types';
 import { getPetWindowSize } from '../shared/pet-layout';
 import { deriveGrowth } from '../shared/growth';
 import { FileService } from './file-service';
 import { StateStore } from './state-store';
 import { getProfilePath } from './profile';
+import { observeMacFileDrag } from './mac-file-drag';
 import { BatchOwnership, CHANNELS, clampBounds, getPetSettingsBounds, parsePreferencePatch, PendingPreferenceWrites, permanentDeletionDetail, PetDragSession } from './host-policy';
 
 const APP_NAME = 'file muncher';
@@ -28,6 +29,8 @@ let fileService: FileService;
 let executing = false;
 let quitRequested = false;
 let quitting = false;
+let stopGlobalFileDrag: (() => void) | undefined;
+const globalFileDragTargets = new Map<number, PointerTarget>();
 
 app.setName(APP_NAME);
 const profilePath = getProfilePath(app.getPath('appData'), process.env['FILE_MUNCHER_USER_DATA']);
@@ -76,6 +79,57 @@ function broadcastState(): AppState {
   return state;
 }
 
+function fileDragWindows(): BrowserWindow[] {
+  return [mainWindow, petWindow].filter((window): window is BrowserWindow =>
+    window !== null && !window.isDestroyed() && window.isVisible() && !window.isMinimized());
+}
+
+function clearGlobalFileDrag(window: BrowserWindow): void {
+  if (!globalFileDragTargets.delete(window.id) || window.isDestroyed() || window.webContents.isDestroyed()) return;
+  window.webContents.send(CHANNELS.globalFileDrag, null);
+}
+
+function publishGlobalFileDrag(active: boolean): void {
+  if (!active) {
+    for (const window of [mainWindow, petWindow]) if (window) clearGlobalFileDrag(window);
+    return;
+  }
+  const windows = fileDragWindows();
+  if (windows.length === 0 || quitRequested) return;
+  const cursor = screen.getCursorScreenPoint();
+  for (const window of windows) {
+    const bounds = window.getContentBounds();
+    const zoom = window.webContents.getZoomFactor();
+    const point = { x: (cursor.x - bounds.x) / zoom, y: (cursor.y - bounds.y) / zoom };
+    const previous = globalFileDragTargets.get(window.id);
+    if (previous?.x === point.x && previous.y === point.y) continue;
+    globalFileDragTargets.set(window.id, point);
+    window.webContents.send(CHANNELS.globalFileDrag, point);
+  }
+}
+
+function syncGlobalFileDrag(): void {
+  if (process.platform !== 'darwin') return;
+  if (quitRequested || fileDragWindows().length === 0) {
+    stopGlobalFileDrag?.();
+    stopGlobalFileDrag = undefined;
+  } else if (!stopGlobalFileDrag) {
+    stopGlobalFileDrag = observeMacFileDrag(publishGlobalFileDrag, message => {
+      console.warn('[File Muncher] Global file-drag tracking:', message);
+    }, () => { stopGlobalFileDrag = undefined; });
+  }
+}
+
+function trackWindowFileDrag(window: BrowserWindow): void {
+  const refresh = (): void => { clearGlobalFileDrag(window); syncGlobalFileDrag(); };
+  window.on('show', refresh);
+  window.on('hide', refresh);
+  window.on('minimize', refresh);
+  window.on('restore', refresh);
+  window.on('closed', refresh);
+  window.webContents.on('did-finish-load', refresh);
+}
+
 function secureWindow(window: BrowserWindow, view: 'main' | 'pet' | 'pet-settings'): void {
   const entryPath = path.join(app.getAppPath(), 'dist', 'index.html');
   expectedUrls.set(window.webContents.id, `${pathToFileURL(entryPath).href}?view=${view}`);
@@ -113,6 +167,7 @@ function createMainWindow(): BrowserWindow {
     },
   });
   mainWindow = window;
+  trackWindowFileDrag(window);
   window.once('ready-to-show', () => window.show());
   window.on('close', event => {
     if (quitting) return;
@@ -133,6 +188,7 @@ function openMainWindow(): void {
   if (window.isMinimized()) window.restore();
   window.show();
   window.focus();
+  syncGlobalFileDrag();
 }
 
 function keepPetOnScreen(): void {
@@ -172,6 +228,7 @@ function createPetWindow(): BrowserWindow {
     },
   });
   petWindow = window;
+  trackWindowFileDrag(window);
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   window.once('ready-to-show', () => {
     if (stateStore.getState().preferences.petVisible) window.showInactive();
@@ -517,6 +574,7 @@ if (!hasLock) {
   app.on('window-all-closed', () => { /* The tray keeps the desktop pet available. */ });
   app.on('before-quit', event => {
     quitRequested = true;
+    syncGlobalFileDrag();
     pendingPreferenceWrites.close();
     if (executing || pendingPreferenceWrites.hasPending) {
       event.preventDefault();

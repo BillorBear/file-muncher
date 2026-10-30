@@ -20,6 +20,7 @@ export const CHANNELS = {
   execute: 'shredder:execute',
   preferences: 'shredder:preferences',
   stateChanged: 'shredder:state-changed',
+  globalFileDrag: 'shredder:global-file-drag',
   openMain: 'shredder:open-main',
   openPetSettings: 'shredder:open-pet-settings',
   closePetSettings: 'shredder:close-pet-settings',

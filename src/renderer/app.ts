@@ -57,6 +57,7 @@ function previewApi(): DesktopApi {
     executeBatch: async () => { throw new Error('预览模式不会删除文件。'); },
     updatePreferences: async (patch) => { state = { ...state, preferences: { ...state.preferences, ...patch } }; return state; },
     onState: () => () => undefined,
+    onGlobalFileDrag: () => () => undefined,
     onPetSettingsDismissRequested: () => () => undefined,
     openMain: async () => { location.search = '?view=main'; },
     openPetSettings: async () => { location.search = '?view=pet-settings'; },
@@ -88,7 +89,7 @@ function mainMarkup(): string {
           <div class="speech-bubble" id="speech">今天有什么好吃的？</div>
           <div class="hero-creature" id="creature" role="button" tabindex="0" aria-label="点击与宠物互动"></div>
           <div class="drop-caption"><h3 id="drop-title">拖进来，喂给我。</h3><p id="drop-subtitle">文件或文件夹都可以，我不挑食。</p></div>
-          <div class="drop-overlay">松手，开饭！</div><div class="stage-floor"></div>
+          <div class="drop-overlay" aria-hidden="true"></div><div class="stage-floor"></div>
         </section>
         <div class="feeding-actions"><div class="choose-actions"><button class="primary-button" id="choose-files">${icon('plus')}选文件喂它</button><button class="folder-button" id="choose-folder" title="选择文件夹" aria-label="选择文件夹">${icon('folder')}</button></div><button class="preview-button" id="preview">${icon('play')}试播动画<span>不删除文件</span></button></div>
         <section class="pet-stats" aria-label="宠物成长统计"><div class="stat"><span>累计吃掉</span><strong><span data-stat="files">0</span><small>个文件</small></strong></div><div class="stat"><span>吞下的数据</span><strong data-stat="bytes">0 B</strong></div><div class="stat weight-stat"><span>现在的体重 <i title="虚拟体重；根据成功处理的文件数和大小成长">↗</i></span><strong><span data-stat="weight">1.2</span><small>kg</small></strong></div><div class="growth-stat"><span class="growth-level" data-stat="level"></span><span class="growth-label" data-stat="growth"></span><div class="growth-track"><i id="growth-progress"></i></div><small>慢慢长大，最多长到 1.3 倍</small></div></section>
@@ -110,7 +111,7 @@ function petMarkup(): string {
     <div class="pet-speech" id="speech" role="status" hidden></div>
     <div class="pet-scene" id="creature" role="button" tabindex="0" aria-label="悬浮宠物：点击互动，拖动身体移动，右键调整大小，拖入文件喂食"></div>
     <div class="pet-reaction" aria-hidden="true"><svg viewBox="0 0 100 80"><path class="reaction-heart" d="M50 56 27 33C10 13 38 1 50 20 62 1 90 13 73 33Z"/><path class="reaction-spark" d="m12 50 3 8 8 3-8 3-3 8-3-8-8-3 8-3Zm76-39 2 6 6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg></div>
-    <div class="drop-overlay">松手，开饭！</div><div class="pet-result" id="result-panel" role="status" hidden><strong id="result-title"></strong><p id="result-detail"></p><ul id="result-items"></ul><button id="pet-result-dismiss" aria-label="收起提示">知道了</button></div></main>`;
+    <div class="drop-overlay" aria-hidden="true"></div><div class="pet-result" id="result-panel" role="status" hidden><strong id="result-title"></strong><p id="result-detail"></p><ul id="result-items"></ul><button id="pet-result-dismiss" aria-label="收起提示">知道了</button></div></main>`;
 }
 
 function petSettingsMarkup(): string {
@@ -209,7 +210,6 @@ function updateState(next: AppState): void {
   syncSizeControl();
   if (isPetSettings) return;
   if (lastTheme !== theme.id) { element('#creature').innerHTML = sceneMarkup(theme.id); lastTheme = theme.id; }
-  element('.drop-overlay').textContent = theme.id === 'blade' ? '松手，开火！' : '松手，开饭！';
   document.querySelectorAll<HTMLElement>('[data-stat="files"]').forEach(node => { node.textContent = state.stats.files.toLocaleString('zh-CN'); });
   document.querySelectorAll<HTMLElement>('[data-stat="bytes"]').forEach(node => { node.textContent = formatBytes(state.stats.bytes); });
   document.querySelectorAll<HTMLElement>('[data-stat="weight"]').forEach(node => { node.textContent = growth.weightKg.toFixed(1); });
@@ -308,6 +308,8 @@ function bindDrop(): void {
     },
     onDrop: files => { void feed(() => api.prepareDrop(files)); },
   });
+  const unsubscribeGlobalDrag = api.onGlobalFileDrag?.(point => fileTracking?.trackGlobalFileDrag(point));
+  window.addEventListener('pagehide', () => unsubscribeGlobalDrag?.(), { once: true });
   zone.addEventListener('keydown', event => { if ((event.key === 'Enter' || event.key === ' ') && event.target === zone && !isPet) { event.preventDefault(); void feed(() => api.choose('files')); } });
 }
 

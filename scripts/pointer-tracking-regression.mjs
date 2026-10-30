@@ -46,6 +46,19 @@ try {
   assert.notEqual(await pet.locator('#drop-zone').getAttribute('data-looking'), 'true');
   assert.equal((await pet.evaluate(() => window.shredder.getState())).stats.files, 0);
 
+  await desktop.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=pet'));
+    window.webContents.send('shredder:global-file-drag', { x: -1900, y: -250 });
+  });
+  await expect(pet.locator('#drop-zone')).toHaveAttribute('data-looking', 'true');
+  assert.notEqual(await pet.locator('#drop-zone').getAttribute('data-tracking'), 'true');
+  assert.notEqual(await pet.locator('#speech').textContent(), 'stand by !');
+  await desktop.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=pet'));
+    window.webContents.send('shredder:global-file-drag', null);
+  });
+  assert.notEqual(await pet.locator('#drop-zone').getAttribute('data-looking'), 'true');
+
   await pet.evaluate(() => window.shredder.openPetSettings());
   await expect.poll(() => desktop.windows().some(page => page.url().includes('view=pet-settings'))).toBe(true);
   const settings = desktop.windows().find(page => page.url().includes('view=pet-settings'));
@@ -88,7 +101,7 @@ try {
   });
   await expect.poll(() => desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(window => window.webContents.getURL().includes('view=pet-settings') && window.isVisible()))).toBe(false);
   assert.deepEqual(errors, []);
-  console.log('PASS: no idle cursor polling or gaze, real file-drag readiness, drag cleanup, inside-card interaction, stale-dismissal cancellation, outside-focus dismissal');
+  console.log('PASS: no idle cursor gaze, global file-drag IPC, local drop readiness, drag cleanup, inside-card interaction, stale-dismissal cancellation, outside-focus dismissal');
 } finally {
   if (desktop) await desktop.close();
   await rm(profile, { recursive: true, force: true });

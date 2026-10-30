@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { IpcRendererEvent } from 'electron';
-import type { AppState, DesktopApi } from '../shared/types';
+import type { AppState, DesktopApi, PointerTarget } from '../shared/types';
 import { CHANNELS } from './host-policy';
 
 const api: DesktopApi = {
@@ -26,6 +26,11 @@ const api: DesktopApi = {
     const callback = (_event: IpcRendererEvent, state: AppState): void => listener(state);
     ipcRenderer.on(CHANNELS.stateChanged, callback);
     return () => ipcRenderer.removeListener(CHANNELS.stateChanged, callback);
+  },
+  onGlobalFileDrag: listener => {
+    const callback = (_event: IpcRendererEvent, point: PointerTarget | null): void => listener(point);
+    ipcRenderer.on(CHANNELS.globalFileDrag, callback);
+    return () => ipcRenderer.removeListener(CHANNELS.globalFileDrag, callback);
   },
   onPetSettingsDismissRequested: listener => {
     const callback = (_event: IpcRendererEvent, requestId: number): void => listener(requestId);
