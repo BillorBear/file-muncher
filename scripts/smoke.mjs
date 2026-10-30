@@ -51,6 +51,21 @@ async function exists(path) { try { await access(path); return true; } catch { r
 async function petBounds() {
   return desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => new URL(window.webContents.getURL()).searchParams.get('view') === 'pet').getBounds());
 }
+async function petBodyBounds() {
+  const page = desktop.windows().find(page => new URL(page.url()).searchParams.get('view') === 'pet');
+  const body = await page.locator('#creature .munch-character').evaluate(node => {
+    const bounds = node.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+  });
+  const window = await petBounds();
+  return { ...body, x: body.x + window.x, y: body.y + window.y };
+}
+async function settingsBodyGap() {
+  const card = await petSettingsBounds();
+  const body = await petBodyBounds();
+  return Math.max(card.x - body.x - body.width, body.x - card.x - card.width,
+    card.y - body.y - body.height, body.y - card.y - card.height);
+}
 async function petSize() {
   const { width, height } = await petBounds();
   return { width, height };
@@ -80,6 +95,8 @@ try {
   const petSettings = desktop.windows().find(page => new URL(page.url()).searchParams.get('view') === 'pet-settings');
   petSettings.on('pageerror', error => errors.push(error.message));
   await expect(petSettings.locator('#pet-size')).toHaveValue('70');
+  await expect.poll(() => desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()
+    .find(window => window.webContents.getURL().includes('view=pet-settings'))?.isFocused())).toBe(true);
   assert.equal(await petSettings.locator('#creature').count(), 0);
   await assert.rejects(() => pet.evaluate(() => window.shredder.closePetSettings()), /只有宠物设置窗口/);
   await assert.rejects(() => petSettings.evaluate(() => window.shredder.choose('files')), /此窗口不能处理文件/);
@@ -93,22 +110,22 @@ try {
   await petSettings.evaluate(() => document.querySelector('#permission-file-input').remove());
   const initialSettingsBounds = await petSettingsBounds();
   assert.deepEqual({ width: initialSettingsBounds.width, height: initialSettingsBounds.height }, { width: 260, height: 180 });
-  assertSeparate(initialSettingsBounds, await petBounds());
-  await petSettings.locator('#pet-size').evaluate(input => {
-    input.value = '50';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
+  assertSeparate(initialSettingsBounds, await petBodyBounds());
+  assert.ok(await settingsBodyGap() < 26, 'Settings should sit next to the visible body.');
+  const slider = await petSettings.locator('#pet-size').boundingBox();
+  assert.ok(slider);
+  await petSettings.mouse.move(slider.x + slider.width * 0.4, slider.y + slider.height / 2);
+  await petSettings.mouse.down();
+  await petSettings.mouse.move(slider.x + 1, slider.y + slider.height / 2, { steps: 4 });
   await expect.poll(() => petSize()).toEqual({ width: 150, height: 194 });
   await expect.poll(async () => (await pet.evaluate(() => window.shredder.getState())).preferences.petSize).toBe(0.5);
-  assert.deepEqual(await petSettingsBounds(), initialSettingsBounds, 'Resizing should keep settings stationary.');
-  assertSeparate(await petSettingsBounds(), await petBounds());
-  await petSettings.locator('#pet-size').evaluate(input => {
-    input.value = '100';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
+  assert.deepEqual(await petSettingsBounds(), initialSettingsBounds, 'The card must not move under the held slider.');
+  await petSettings.mouse.move(slider.x + slider.width - 1, slider.y + slider.height / 2, { steps: 4 });
   await expect.poll(() => petSize()).toEqual({ width: 300, height: 315 });
-  assert.deepEqual(await petSettingsBounds(), initialSettingsBounds, 'Enlarging the pet must not move the settings panel.');
-  assertSeparate(await petSettingsBounds(), await petBounds());
+  assert.deepEqual(await petSettingsBounds(), initialSettingsBounds, 'Growing the pet must not move the held card.');
+  await petSettings.mouse.up();
+  await expect.poll(settingsBodyGap).toBeLessThan(26);
+  assertSeparate(await petSettingsBounds(), await petBodyBounds());
   await petSettings.locator('#pet-size').evaluate(input => {
     input.value = '50';
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -118,7 +135,7 @@ try {
   await expect.poll(() => desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => new URL(window.webContents.getURL()).searchParams.get('view') === 'pet-settings')?.isVisible() ?? false)).toBe(false);
   assert.deepEqual(await desktop.evaluate(({ BrowserWindow }) => Object.fromEntries(BrowserWindow.getAllWindows().filter(window => ['main', 'pet'].includes(new URL(window.webContents.getURL()).searchParams.get('view'))).map(window => [new URL(window.webContents.getURL()).searchParams.get('view'), window.isVisible()]))), { main: true, pet: true },
     'Closing settings must leave both main and pet windows visible.');
-  console.log('PASS: compact pet, stationary separate settings, live resizing without overlap, settings file-operation denial, pet-only IPC authorization');
+  console.log('PASS: compact pet, settings anchored to visible body, live resizing without overlap, settings file-operation denial, pet-only IPC authorization');
   for (const theme of ['munch', 'pixel', 'blade', 'void', 'paper']) {
     await main.locator(`[data-select-theme="${theme}"]`).click();
     await expect(main.locator('body')).toHaveAttribute('data-theme', theme);

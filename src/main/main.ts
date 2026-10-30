@@ -3,15 +3,15 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, session, shell, Tray } from 'electron';
 import type { IpcMainEvent, IpcMainInvokeEvent, NativeImage } from 'electron';
-import type { AppState, BatchResult, PointerTarget, Preferences, PreparedBatch } from '../shared/types';
+import type { AppState, BatchResult, Preferences, PreparedBatch } from '../shared/types';
 import { getPetWindowSize } from '../shared/pet-layout';
+import { deriveGrowth } from '../shared/growth';
 import { FileService } from './file-service';
 import { StateStore } from './state-store';
 import { getProfilePath } from './profile';
-import { BatchOwnership, CHANNELS, clampBounds, getPetSettingsBounds, getWindowPointerTarget, parsePreferencePatch, PendingPreferenceWrites, permanentDeletionDetail, PetDragSession } from './host-policy';
+import { BatchOwnership, CHANNELS, clampBounds, getPetSettingsBounds, parsePreferencePatch, PendingPreferenceWrites, permanentDeletionDetail, PetDragSession } from './host-policy';
 
 const APP_NAME = 'file muncher';
-const POINTER_POLL_INTERVAL_MS = 33;
 const batchOwnership = new BatchOwnership();
 const petDragSession = new PetDragSession();
 const pendingPreferenceWrites = new PendingPreferenceWrites();
@@ -19,14 +19,15 @@ const expectedUrls = new Map<number, string>();
 let mainWindow: BrowserWindow | null = null;
 let petWindow: BrowserWindow | null = null;
 let petSettingsWindow: BrowserWindow | null = null;
+let petSettingsPointerHeld = false;
+let petSettingsDismissalSequence = 0;
+let pendingPetSettingsDismissal: number | undefined;
 let tray: Tray | null = null;
 let stateStore: StateStore;
 let fileService: FileService;
 let executing = false;
 let quitRequested = false;
 let quitting = false;
-let pointerPollTimer: ReturnType<typeof setInterval> | null = null;
-const lastPointerTargets = new Map<number, PointerTarget>();
 
 app.setName(APP_NAME);
 const profilePath = getProfilePath(app.getPath('appData'), process.env['FILE_MUNCHER_USER_DATA']);
@@ -67,63 +68,12 @@ function iconPath(): string {
 
 function broadcastState(): AppState {
   const state = stateStore.getState();
+  positionPetSettings();
   for (const window of [mainWindow, petWindow, petSettingsWindow]) {
     if (window && !window.isDestroyed()) window.webContents.send(CHANNELS.stateChanged, state);
   }
   rebuildTrayMenu();
   return state;
-}
-
-function pointerWindows(): BrowserWindow[] {
-  return [mainWindow, petWindow].filter((window): window is BrowserWindow =>
-    window !== null && !window.isDestroyed() && window.isVisible() && !window.isMinimized());
-}
-
-function publishPointerTargets(): void {
-  const windows = pointerWindows();
-  if (quitRequested || windows.length === 0) {
-    stopPointerPolling();
-    return;
-  }
-  const cursor = screen.getCursorScreenPoint();
-  for (const window of windows) {
-    const point = getWindowPointerTarget(cursor, window.getContentBounds(), window.webContents.getZoomFactor());
-    const previous = lastPointerTargets.get(window.id);
-    if (previous?.x === point.x && previous.y === point.y) continue;
-    lastPointerTargets.set(window.id, point);
-    window.webContents.send(CHANNELS.pointerTarget, point);
-  }
-}
-
-function stopPointerPolling(): void {
-  if (pointerPollTimer) clearInterval(pointerPollTimer);
-  pointerPollTimer = null;
-  lastPointerTargets.clear();
-}
-
-function syncPointerPolling(): void {
-  if (quitRequested || pointerWindows().length === 0) {
-    stopPointerPolling();
-    return;
-  }
-  if (!pointerPollTimer) {
-    pointerPollTimer = setInterval(publishPointerTargets, POINTER_POLL_INTERVAL_MS);
-    pointerPollTimer.unref();
-  }
-  publishPointerTargets();
-}
-
-function trackWindowPointer(window: BrowserWindow): void {
-  const refresh = (): void => {
-    lastPointerTargets.delete(window.id);
-    syncPointerPolling();
-  };
-  window.on('show', refresh);
-  window.on('hide', refresh);
-  window.on('minimize', refresh);
-  window.on('restore', refresh);
-  window.on('closed', refresh);
-  window.webContents.on('did-finish-load', refresh);
 }
 
 function secureWindow(window: BrowserWindow, view: 'main' | 'pet' | 'pet-settings'): void {
@@ -163,7 +113,6 @@ function createMainWindow(): BrowserWindow {
     },
   });
   mainWindow = window;
-  trackWindowPointer(window);
   window.once('ready-to-show', () => window.show());
   window.on('close', event => {
     if (quitting) return;
@@ -192,6 +141,7 @@ function keepPetOnScreen(): void {
   const workArea = screen.getDisplayMatching(bounds).workArea;
   const clamped = clampBounds(bounds, workArea);
   if (clamped.x !== bounds.x || clamped.y !== bounds.y) petWindow.setBounds(clamped);
+  positionPetSettings();
 }
 
 function createPetWindow(): BrowserWindow {
@@ -222,7 +172,6 @@ function createPetWindow(): BrowserWindow {
     },
   });
   petWindow = window;
-  trackWindowPointer(window);
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   window.once('ready-to-show', () => {
     if (stateStore.getState().preferences.petVisible) window.showInactive();
@@ -248,7 +197,7 @@ function createPetWindow(): BrowserWindow {
 function showPet(): void {
   const window = petWindow && !petWindow.isDestroyed() ? petWindow : createPetWindow();
   keepPetOnScreen();
-  window.showInactive();
+  if (!window.isVisible()) window.showInactive();
 }
 
 function keepPetSettingsOnScreen(): void {
@@ -258,15 +207,31 @@ function keepPetSettingsOnScreen(): void {
   if (clamped.x !== bounds.x || clamped.y !== bounds.y) petSettingsWindow.setBounds(clamped);
 }
 
+function positionPetSettings(): void {
+  if (petSettingsPointerHeld || pendingPreferenceWrites.hasPending || !petSettingsWindow || petSettingsWindow.isDestroyed() ||
+    !petSettingsWindow.isVisible() || !petWindow || petWindow.isDestroyed()) return;
+  const petBounds = petWindow.getBounds();
+  const state = stateStore.getState();
+  const bounds = getPetSettingsBounds(petBounds, screen.getDisplayMatching(petBounds).workArea,
+    state.preferences.theme, deriveGrowth(state.stats).scale);
+  const current = petSettingsWindow.getBounds();
+  if (current.x !== bounds.x || current.y !== bounds.y) petSettingsWindow.setBounds(bounds);
+}
+
 function openPetSettingsWindow(pet: BrowserWindow): void {
+  pendingPetSettingsDismissal = undefined;
+  const petBounds = pet.getBounds();
+  const state = stateStore.getState();
+  const bounds = getPetSettingsBounds(petBounds, screen.getDisplayMatching(petBounds).workArea,
+    state.preferences.theme, deriveGrowth(state.stats).scale);
   if (petSettingsWindow && !petSettingsWindow.isDestroyed()) {
+    petSettingsWindow.setBounds(bounds);
     petSettingsWindow.show();
     petSettingsWindow.focus();
     return;
   }
-  const petBounds = pet.getBounds();
   const window = new BrowserWindow({
-    ...getPetSettingsBounds(petBounds, screen.getDisplayMatching(petBounds).workArea),
+    ...bounds,
     title: `${APP_NAME} · 宠物大小`,
     backgroundColor: '#fcfff7',
     frame: false,
@@ -290,8 +255,19 @@ function openPetSettingsWindow(pet: BrowserWindow): void {
   petSettingsWindow = window;
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   window.once('ready-to-show', () => { window.show(); window.focus(); });
+  window.webContents.on('before-mouse-event', (_event, input) => {
+    if (input.type === 'mouseDown') petSettingsPointerHeld = true;
+    if (input.type === 'mouseUp') { petSettingsPointerHeld = false; positionPetSettings(); }
+  });
+  window.on('focus', () => { pendingPetSettingsDismissal = undefined; });
+  window.on('blur', () => {
+    petSettingsPointerHeld = false;
+    if (quitRequested || window !== petSettingsWindow || window.webContents.isDestroyed()) return;
+    pendingPetSettingsDismissal = ++petSettingsDismissalSequence;
+    window.webContents.send(CHANNELS.petSettingsDismissRequested, pendingPetSettingsDismissal);
+  });
   window.on('moved', keepPetSettingsOnScreen);
-  window.on('closed', () => { petSettingsWindow = null; });
+  window.on('closed', () => { petSettingsWindow = null; petSettingsPointerHeld = false; pendingPetSettingsDismissal = undefined; });
   secureWindow(window, 'pet-settings');
 }
 
@@ -325,6 +301,7 @@ async function savePreferences(patch: Partial<Preferences>): Promise<AppState> {
       broadcastState();
     } finally {
       pendingPreferenceWrites.finish();
+      positionPetSettings();
       resumeRequestedQuit();
     }
   }
@@ -461,6 +438,17 @@ function registerIpc(): void {
   ipcMain.handle(CHANNELS.closePetSettings, event => {
     const window = assertSender(event);
     if (window !== petSettingsWindow) throw new Error('只有宠物设置窗口可以关闭此面板。');
+    pendingPetSettingsDismissal = undefined;
+    window.close();
+  });
+  ipcMain.handle(CHANNELS.dismissPetSettings, (event, requestId: unknown) => {
+    const window = assertSender(event);
+    if (window !== petSettingsWindow) throw new Error('只有宠物设置窗口可以关闭此面板。');
+    if (typeof requestId !== 'number' || !Number.isSafeInteger(requestId) || requestId < 1) {
+      throw new Error('宠物设置关闭请求无效。');
+    }
+    if (requestId !== pendingPetSettingsDismissal || window.isFocused()) return;
+    pendingPetSettingsDismissal = undefined;
     window.close();
   });
   ipcMain.handle(CHANNELS.beginPetDrag, event => {
@@ -529,7 +517,6 @@ if (!hasLock) {
   app.on('window-all-closed', () => { /* The tray keeps the desktop pet available. */ });
   app.on('before-quit', event => {
     quitRequested = true;
-    stopPointerPolling();
     pendingPreferenceWrites.close();
     if (executing || pendingPreferenceWrites.hasPending) {
       event.preventDefault();

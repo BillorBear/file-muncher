@@ -4,7 +4,7 @@ import './pet.css';
 import './pet-motion.css';
 import { bindPetGestures } from './pet-interactions';
 import { bindFileTracking, type FileTracking } from './file-tracking';
-import { PET_SIZE_DEFAULT, PET_SIZE_MIN, PET_SIZE_MAX } from '../shared/pet-layout';
+import { getPetBodyBounds, PET_SIZE_DEFAULT, PET_SIZE_MIN, PET_SIZE_MAX } from '../shared/pet-layout';
 import { THEMES, sceneMarkup } from './themes';
 import { deriveGrowth } from '../shared/growth';
 import type { AnimationPhase, AppState, BatchItemResult, DesktopApi, PreparedBatch, ThemeId } from '../shared/types';
@@ -57,10 +57,11 @@ function previewApi(): DesktopApi {
     executeBatch: async () => { throw new Error('预览模式不会删除文件。'); },
     updatePreferences: async (patch) => { state = { ...state, preferences: { ...state.preferences, ...patch } }; return state; },
     onState: () => () => undefined,
-    onPointerTarget: () => () => undefined,
+    onPetSettingsDismissRequested: () => () => undefined,
     openMain: async () => { location.search = '?view=main'; },
     openPetSettings: async () => { location.search = '?view=pet-settings'; },
     closePetSettings: async () => { location.search = '?view=pet'; },
+    dismissPetSettings: async () => { location.search = '?view=pet'; },
     beginPetDrag: async () => undefined,
     movePetDrag: () => undefined,
     endPetDrag: async () => undefined,
@@ -187,8 +188,9 @@ function setPhase(phase: AnimationPhase): void {
   if (phase === 'success' || phase === 'error') phaseTimer = setTimeout(() => setPhase('idle'), 2800);
 }
 function setBusy(value: boolean): void {
-  if (value) fileTracking?.reset();
+  if (value) fileTracking?.stop();
   busy = value;
+  if (!value) fileTracking?.reset();
   document.body.classList.toggle('is-busy', value);
   document.querySelectorAll<HTMLButtonElement>('[data-select-theme], #choose-files, #choose-folder, #preview, #settings, #mode-badge').forEach(button => { button.disabled = value; });
   element('#drop-zone').setAttribute('aria-busy', String(value));
@@ -215,6 +217,7 @@ function updateState(next: AppState): void {
   if (isPet) {
     renderPetSpeech();
     element('#creature').style.setProperty('--pet-scale', String(growth.scale));
+    element('#drop-zone').style.setProperty('--pet-body-top', `${getPetBodyBounds(innerWidth, theme.id, growth.scale).y}px`);
   } else {
     element('#theme-title').textContent = theme.name;
     element('#style-label').textContent = theme.tagline;
@@ -305,9 +308,6 @@ function bindDrop(): void {
     },
     onDrop: files => { void feed(() => api.prepareDrop(files)); },
   });
-  document.addEventListener('pointermove', event => fileTracking?.trackPointer({ x: event.clientX, y: event.clientY }));
-  const unsubscribe = api.onPointerTarget?.(point => fileTracking?.trackPointer(point));
-  window.addEventListener('pagehide', () => unsubscribe?.(), { once: true });
   zone.addEventListener('keydown', event => { if ((event.key === 'Enter' || event.key === ' ') && event.target === zone && !isPet) { event.preventDefault(); void feed(() => api.choose('files')); } });
 }
 
@@ -360,6 +360,7 @@ function bindMain(): void {
 
 function bindPet(): void {
   const creature = element('#creature');
+  window.addEventListener('resize', () => updateState(state));
   bindPetGestures(creature, api, interact, error => showMessage('暂时无法移动宠物', errorMessage(error)));
   creature.addEventListener('pointerenter', () => { petHovered = true; renderPetSpeech(); });
   creature.addEventListener('pointerleave', () => { petHovered = false; renderPetSpeech(); });
@@ -384,6 +385,8 @@ function bindPetSettings(): void {
   element('#pet-hide').addEventListener('click', () => finish(async () => { await api.updatePreferences({ petVisible: false }); }));
   element('#pet-quit').addEventListener('click', () => finish(() => api.quit()));
   document.addEventListener('keydown', event => { if (event.key === 'Escape') finish(() => api.closePetSettings()); });
+  const unsubscribe = api.onPetSettingsDismissRequested(requestId => finish(() => api.dismissPetSettings(requestId)));
+  window.addEventListener('pagehide', unsubscribe, { once: true });
 }
 
 async function start(): Promise<void> {

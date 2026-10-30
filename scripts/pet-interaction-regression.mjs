@@ -17,17 +17,22 @@ async function newPetPage(view = 'pet') {
       stats: { files: 0, bytes: 0, meals: 0 },
     };
     let stateListener;
+    let dismissListener;
+    let dismissalSequence = 0;
+    let pendingDismissal;
+    let settingsFocused = true;
     let outcome = 'success';
     let delayNextDragBegin = false;
     let releaseDragBegin;
     let dragSessionActive = false;
     let holdPreferenceWrites = false;
     const pendingPreferenceWrites = [];
-    const calls = { prepare: 0, execute: 0, openMain: 0, openPetSettings: 0, closePetSettings: 0, preferences: [], drag: [] };
+    const calls = { prepare: 0, execute: 0, openMain: 0, openPetSettings: 0, closePetSettings: 0, dismissPetSettings: [], preferences: [], drag: [] };
     const broadcast = () => stateListener?.(structuredClone(state));
     window.shredder = {
       getState: async () => structuredClone(state),
       onState: listener => { stateListener = listener; return () => { stateListener = undefined; }; },
+      onPetSettingsDismissRequested: listener => { dismissListener = listener; return () => { dismissListener = undefined; }; },
       prepareDrop: async () => {
         calls.prepare += 1;
         return {
@@ -67,8 +72,14 @@ async function newPetPage(view = 'pet') {
       movePetDrag: (...args) => { calls.drag.push({ method: 'move', args }); },
       endPetDrag: async (...args) => { calls.drag.push({ method: 'end', args }); dragSessionActive = false; },
       openMain: async () => { calls.openMain += 1; },
-      openPetSettings: async () => { calls.openPetSettings += 1; },
+      openPetSettings: async () => { calls.openPetSettings += 1; pendingDismissal = undefined; settingsFocused = true; },
       closePetSettings: async () => { calls.closePetSettings += 1; },
+      dismissPetSettings: async requestId => {
+        calls.dismissPetSettings.push(requestId);
+        if (requestId !== pendingDismissal || settingsFocused) return;
+        pendingDismissal = undefined;
+        calls.closePetSettings += 1;
+      },
       quit: async () => {},
     };
     window.petTest = {
@@ -79,6 +90,12 @@ async function newPetPage(view = 'pet') {
       delayDragBegin: () => { delayNextDragBegin = true; },
       releaseDragBegin: () => { releaseDragBegin?.(); releaseDragBegin = undefined; },
       holdPreferences: () => { holdPreferenceWrites = true; },
+      blurSettings: () => {
+        settingsFocused = false;
+        pendingDismissal = ++dismissalSequence;
+        dismissListener?.(pendingDismissal);
+      },
+      focusSettings: () => { settingsFocused = true; pendingDismissal = undefined; },
       resolveNextPreferences: () => {
         const pending = pendingPreferenceWrites.shift();
         if (!pending) throw new Error('No preference write is waiting.');
@@ -331,6 +348,64 @@ try {
       'A failed write must not silently close the settings panel after a later write succeeds.');
     await expect(page.locator('.pet-settings-panel')).toBeVisible();
   }, 'pet-settings');
+
+  await run('settings stay open for inside clicks and close after a native outside focus change', async page => {
+    await page.locator('#pet-size').click();
+    assert.equal(await page.evaluate(() => window.petTest.snapshot().calls.closePetSettings), 0);
+    await page.evaluate(() => window.petTest.blurSettings());
+    await expect.poll(() => page.evaluate(() => window.petTest.snapshot().calls.closePetSettings)).toBe(1);
+    assert.deepEqual(await page.evaluate(() => window.petTest.snapshot().calls.dismissPetSettings), [1],
+      'Native dismissal must echo its request token instead of using an unconditional close.');
+  }, 'pet-settings');
+
+  await run('desktop settings ignore renderer-only blur events', async page => {
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    assert.equal(await page.evaluate(() => window.petTest.snapshot().calls.closePetSettings), 0,
+      'Only native focus changes should dismiss desktop settings.');
+  }, 'pet-settings');
+
+  for (const writeResult of ['success', 'error']) {
+    await run(`outside dismissal waits for size writes: ${writeResult}`, async page => {
+      await page.evaluate(() => window.petTest.holdPreferences());
+      await page.locator('#pet-size').evaluate(input => {
+        input.value = '55';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await page.evaluate(() => window.petTest.blurSettings());
+      assert.equal(await page.evaluate(() => window.petTest.snapshot().calls.closePetSettings), 0);
+      if (writeResult === 'success') {
+        await page.evaluate(() => window.petTest.resolveNextPreferences());
+        await expect.poll(() => page.evaluate(() => window.petTest.snapshot().calls.closePetSettings)).toBe(1);
+        assert.equal(await page.evaluate(() => window.petTest.snapshot().state.preferences.petSize), 0.55);
+      } else {
+        await page.evaluate(() => window.petTest.rejectNextPreferences());
+        await expect(page.locator('#size-error')).toContainText('Synthetic preference write failure');
+        assert.equal(await page.evaluate(() => window.petTest.snapshot().calls.closePetSettings), 0);
+        assert.deepEqual(await page.evaluate(() => window.petTest.snapshot().calls.dismissPetSettings), [],
+          'A failed write must not acknowledge native dismissal.');
+      }
+    }, 'pet-settings');
+  }
+
+  for (const action of ['refocus', 'reopen']) {
+    await run(`${action} cancels native dismissal while a size write is pending`, async page => {
+      await page.evaluate(() => window.petTest.holdPreferences());
+      await page.locator('#pet-size').evaluate(input => {
+        input.value = '55';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await page.evaluate(() => window.petTest.blurSettings());
+      if (action === 'refocus') await page.evaluate(() => window.petTest.focusSettings());
+      else await page.evaluate(() => window.shredder.openPetSettings());
+      await page.evaluate(() => window.petTest.resolveNextPreferences());
+      await expect.poll(() => page.evaluate(() => window.petTest.snapshot().calls.dismissPetSettings)).toEqual([1]);
+      assert.equal(await page.evaluate(() => window.petTest.snapshot().calls.closePetSettings), 0,
+        'An old blur must not close settings that the user has returned to.');
+      await page.evaluate(() => window.petTest.blurSettings());
+      await expect.poll(() => page.evaluate(() => window.petTest.snapshot().calls.closePetSettings)).toBe(1);
+      assert.deepEqual(await page.evaluate(() => window.petTest.snapshot().calls.dismissPetSettings), [1, 2]);
+    }, 'pet-settings');
+  }
 
   await run('successful meal speech lasts two seconds and then clears', async page => {
     await dropSyntheticFile(page);

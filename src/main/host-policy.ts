@@ -1,5 +1,5 @@
-import type { PointerTarget, Preferences, PreparedBatch } from '../shared/types';
-import { getPetWindowSize, isPetSize, PET_SIZE_MAX } from '../shared/pet-layout';
+import type { Preferences, PreparedBatch, ThemeId } from '../shared/types';
+import { getPetBodyBounds, isPetSize } from '../shared/pet-layout';
 
 export interface WindowBounds {
   x: number;
@@ -20,10 +20,11 @@ export const CHANNELS = {
   execute: 'shredder:execute',
   preferences: 'shredder:preferences',
   stateChanged: 'shredder:state-changed',
-  pointerTarget: 'shredder:pointer-target',
   openMain: 'shredder:open-main',
   openPetSettings: 'shredder:open-pet-settings',
   closePetSettings: 'shredder:close-pet-settings',
+  petSettingsDismissRequested: 'shredder:pet-settings-dismiss-requested',
+  dismissPetSettings: 'shredder:dismiss-pet-settings',
   beginPetDrag: 'shredder:begin-pet-drag',
   movePetDrag: 'shredder:move-pet-drag',
   endPetDrag: 'shredder:end-pet-drag',
@@ -75,36 +76,39 @@ function overlapArea(first: WindowBounds, second: WindowBounds): number {
   return width * height;
 }
 
-export function getPetSettingsBounds(pet: WindowBounds, workArea: WindowBounds): WindowBounds {
-  const largest = clampBounds({ ...pet, ...getPetWindowSize(PET_SIZE_MAX) }, workArea);
-  const reserve = {
-    x: Math.min(pet.x, largest.x),
-    y: Math.min(pet.y, largest.y),
-    width: Math.max(pet.x + pet.width, largest.x + largest.width) - Math.min(pet.x, largest.x),
-    height: Math.max(pet.y + pet.height, largest.y + largest.height) - Math.min(pet.y, largest.y),
-  };
+function bodyGapError(panel: WindowBounds, body: WindowBounds): number {
+  const x = Math.max(0, panel.x - body.x - body.width, body.x - panel.x - panel.width);
+  const y = Math.max(0, panel.y - body.y - body.height, body.y - panel.y - panel.height);
+  return Math.abs(Math.hypot(x, y) - PET_SETTINGS_GAP);
+}
+
+export function getPetSettingsBounds(pet: WindowBounds, workArea: WindowBounds,
+  theme: ThemeId = 'munch', growthScale = 1): WindowBounds {
+  const relativeBody = getPetBodyBounds(pet.width, theme, growthScale);
+  const body = { ...relativeBody, x: pet.x + relativeBody.x, y: pet.y + relativeBody.y };
+  const speech = { x: pet.x + 4, y: Math.max(pet.y + 4, body.y - 74), width: pet.width - 8,
+    height: Math.min(body.y - pet.y - 14, 64) };
+  const centerY = body.y + (body.height - PET_SETTINGS_HEIGHT) / 2;
   const positions = [
-    { x: reserve.x + reserve.width + PET_SETTINGS_GAP, y: pet.y },
-    { x: reserve.x - PET_SETTINGS_WIDTH - PET_SETTINGS_GAP, y: pet.y },
-    { x: pet.x, y: reserve.y - PET_SETTINGS_HEIGHT - PET_SETTINGS_GAP },
-    { x: pet.x, y: reserve.y + reserve.height + PET_SETTINGS_GAP },
+    { x: body.x + body.width + PET_SETTINGS_GAP, y: body.y },
+    { x: body.x - PET_SETTINGS_WIDTH - PET_SETTINGS_GAP, y: body.y },
+    { x: pet.x + pet.width + PET_SETTINGS_GAP, y: centerY },
+    { x: pet.x - PET_SETTINGS_WIDTH - PET_SETTINGS_GAP, y: centerY },
+    { x: body.x + (body.width - PET_SETTINGS_WIDTH) / 2, y: body.y + body.height + PET_SETTINGS_GAP },
+    { x: body.x + (body.width - PET_SETTINGS_WIDTH) / 2, y: speech.y - PET_SETTINGS_HEIGHT - PET_SETTINGS_GAP },
   ];
   const candidates = positions.map(position => clampBounds({ ...position,
     width: PET_SETTINGS_WIDTH, height: PET_SETTINGS_HEIGHT }, workArea));
-  // Reserve growth space when possible while prioritizing the currently visible pet on small displays.
-  candidates.sort((first, second) => overlapArea(first, pet) - overlapArea(second, pet)
-    || overlapArea(first, reserve) - overlapArea(second, reserve));
+  // Prefer a close panel even at screen edges; avoid speech when equally close positions fit.
+  candidates.sort((first, second) => overlapArea(first, body) - overlapArea(second, body)
+    || bodyGapError(first, body) - bodyGapError(second, body)
+    || overlapArea(first, speech) - overlapArea(second, speech));
   return candidates[0]!;
 }
 
 interface CursorPoint {
   x: number;
   y: number;
-}
-
-export function getWindowPointerTarget(cursor: CursorPoint, bounds: WindowBounds, zoomFactor: number): PointerTarget {
-  // Electron screen and window bounds use DIP; renderer coordinates also account for page zoom.
-  return { x: (cursor.x - bounds.x) / zoomFactor, y: (cursor.y - bounds.y) / zoomFactor };
 }
 
 export class PetDragSession {

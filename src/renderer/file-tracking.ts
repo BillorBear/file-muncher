@@ -13,14 +13,14 @@ interface FileTrackingOptions {
 
 export interface FileTracking {
   reset(): void;
-  trackPointer(point: PointerTarget): void;
+  stop(): void;
 }
 
 export function bindFileTracking(options: FileTrackingOptions): FileTracking {
   const { zone, creature, isBusy, onHoverChange, onDrop } = options;
   let fileDragging = false;
   let hovered = false;
-  let angle = -20;
+  let facing: -1 | 1 = 1;
   let expiry: ReturnType<typeof setTimeout> | undefined;
 
   const hover = (value: boolean): void => {
@@ -28,21 +28,31 @@ export function bindFileTracking(options: FileTrackingOptions): FileTracking {
     hovered = value;
     onHoverChange(value);
   };
-  const reset = (): void => {
+  const stop = (): void => {
     clearTimeout(expiry);
     fileDragging = false;
     delete zone.dataset.tracking;
     delete zone.dataset.looking;
     hover(false);
   };
+  const reset = (): void => {
+    stop();
+    if (isBusy()) return;
+    facing = 1;
+    for (const property of ['--aim-angle', '--turret-facing', '--tank-travel-y', '--look-x', '--look-y', '--look-tilt']) {
+      creature.style.removeProperty(property);
+    }
+  };
   const aim = (point: PointerTarget): void => {
     if (isBusy() || zone.dataset.interacting || creature.dataset.dragging) return;
     const matrix = creature.querySelector('svg')?.getScreenCTM();
     if (!matrix) return;
     const local = new DOMPoint(point.x, point.y).matrixTransform(matrix.inverse());
-    const gaze = calculatePetGaze(local, angle);
-    angle = gaze.angle;
-    creature.style.setProperty('--aim-angle', `${angle}deg`);
+    const gaze = calculatePetGaze(local, facing);
+    facing = gaze.turretFacing;
+    creature.style.setProperty('--aim-angle', `${gaze.angle}deg`);
+    creature.style.setProperty('--turret-facing', String(facing));
+    creature.style.setProperty('--tank-travel-y', `${gaze.tankTravelY}px`);
     creature.style.setProperty('--look-x', `${gaze.x}px`);
     creature.style.setProperty('--look-y', `${gaze.y}px`);
     creature.style.setProperty('--look-tilt', `${gaze.tilt}deg`);
@@ -51,7 +61,7 @@ export function bindFileTracking(options: FileTrackingOptions): FileTracking {
   const insideZone = (target: EventTarget | null): boolean => target instanceof Node && zone.contains(target);
   const trackFile = (event: DragEvent): void => {
     event.preventDefault();
-    if (!event.dataTransfer?.types.includes('Files')) return;
+    if (!event.dataTransfer?.types.includes('Files')) { reset(); return; }
     if (isBusy()) { event.dataTransfer.dropEffect = 'none'; return; }
     fileDragging = true;
     zone.dataset.tracking = 'true';
@@ -79,8 +89,10 @@ export function bindFileTracking(options: FileTrackingOptions): FileTracking {
     event.preventDefault();
     const accepted = insideZone(event.target) && !isBusy();
     const files = [...(event.dataTransfer?.files ?? [])];
-    reset();
-    if (accepted && files.length) onDrop(files);
+    if (accepted && files.length) {
+      stop();
+      onDrop(files);
+    } else reset();
   });
   document.addEventListener('dragend', reset);
   document.addEventListener('keydown', event => { if (event.key === 'Escape') reset(); });
@@ -88,8 +100,5 @@ export function bindFileTracking(options: FileTrackingOptions): FileTracking {
   window.addEventListener('blur', reset);
   window.addEventListener('pagehide', reset);
 
-  return {
-    reset,
-    trackPointer: point => { if (!fileDragging) aim(point); },
-  };
+  return { reset, stop };
 }

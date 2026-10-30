@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { IpcRendererEvent } from 'electron';
-import type { AppState, DesktopApi, PointerTarget } from '../shared/types';
+import type { AppState, DesktopApi } from '../shared/types';
 import { CHANNELS } from './host-policy';
 
 const api: DesktopApi = {
@@ -27,14 +27,15 @@ const api: DesktopApi = {
     ipcRenderer.on(CHANNELS.stateChanged, callback);
     return () => ipcRenderer.removeListener(CHANNELS.stateChanged, callback);
   },
-  onPointerTarget: listener => {
-    const callback = (_event: IpcRendererEvent, point: PointerTarget): void => listener(point);
-    ipcRenderer.on(CHANNELS.pointerTarget, callback);
-    return () => ipcRenderer.removeListener(CHANNELS.pointerTarget, callback);
+  onPetSettingsDismissRequested: listener => {
+    const callback = (_event: IpcRendererEvent, requestId: number): void => listener(requestId);
+    ipcRenderer.on(CHANNELS.petSettingsDismissRequested, callback);
+    return () => ipcRenderer.removeListener(CHANNELS.petSettingsDismissRequested, callback);
   },
   openMain: () => ipcRenderer.invoke(CHANNELS.openMain),
   openPetSettings: () => ipcRenderer.invoke(CHANNELS.openPetSettings),
   closePetSettings: () => ipcRenderer.invoke(CHANNELS.closePetSettings),
+  dismissPetSettings: requestId => ipcRenderer.invoke(CHANNELS.dismissPetSettings, requestId),
   beginPetDrag: () => ipcRenderer.invoke(CHANNELS.beginPetDrag),
   movePetDrag: () => ipcRenderer.send(CHANNELS.movePetDrag),
   endPetDrag: () => ipcRenderer.invoke(CHANNELS.endPetDrag),

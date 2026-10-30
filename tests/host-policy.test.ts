@@ -4,28 +4,11 @@ import {
   BatchOwnership,
   clampBounds,
   getPetSettingsBounds,
-  getWindowPointerTarget,
   parsePreferencePatch,
   PetDragSession,
   PendingPreferenceWrites,
   permanentDeletionDetail,
 } from '../src/main/host-policy';
-
-test('pointer targets stay window-relative outside the window on negative-coordinate displays', () => {
-  assert.deepEqual(getWindowPointerTarget({ x: -1600, y: 120 },
-    { x: -500, y: 300, width: 210, height: 270 }, 1), { x: -1100, y: -180 });
-  assert.deepEqual(getWindowPointerTarget({ x: 300, y: 900 },
-    { x: -500, y: 300, width: 210, height: 270 }, 1), { x: 800, y: 600 });
-});
-
-test('pointer targets convert Electron DIP coordinates to renderer CSS pixels at the current zoom', () => {
-  const bounds = { x: 100, y: 200, width: 300, height: 400 };
-  const cursor = { x: 250, y: 350 };
-  assert.deepEqual(getWindowPointerTarget(cursor, bounds, 1.5), { x: 100, y: 100 });
-  assert.deepEqual(getWindowPointerTarget(cursor, bounds, 0.5), { x: 300, y: 300 });
-  assert.deepEqual(cursor, { x: 250, y: 350 });
-  assert.deepEqual(bounds, { x: 100, y: 200, width: 300, height: 400 });
-});
 
 test('IPC preferences accept only typed supported options', () => {
   assert.deepEqual(parsePreferencePatch({ theme: 'pixel', petVisible: false }), {
@@ -56,24 +39,25 @@ test('pet stays inside a monitor with negative coordinates and a dock inset', ()
   });
 });
 
-test('settings open next to the pet with space reserved for resizing to the maximum size', () => {
+test('settings stay close to the current visible body instead of reserving maximum-size space', () => {
   const area = { x: 0, y: 25, width: 1440, height: 875 };
-  const settings = getPetSettingsBounds({ x: 300, y: 100, width: 150, height: 194 }, area);
-  assert.deepEqual(settings, { x: 612, y: 100, width: 260, height: 180 });
-  assert.ok(settings.x >= 300 + 300);
+  const settings = getPetSettingsBounds({ x: 300, y: 100, width: 150, height: 194 }, area, 'blade', 1);
+  assert.ok(settings.x >= 425 && settings.x <= 429, 'The panel should be about 12px from the small tank.');
+  assert.ok(settings.y >= 205 && settings.y <= 208, 'The panel should align with the tank body, below its speech.');
 });
 
-test('settings open on the left near the right edge and leave room for the growing pet', () => {
+test('settings open to the left near the right edge without reserving future growth', () => {
   const area = { x: -1440, y: 25, width: 1440, height: 875 };
-  const settings = getPetSettingsBounds({ x: -234, y: 634, width: 210, height: 242 }, area);
-  assert.deepEqual(settings, { x: -572, y: 634, width: 260, height: 180 });
-  assert.ok(settings.x + settings.width <= -300);
+  const settings = getPetSettingsBounds({ x: -234, y: 634, width: 210, height: 242 }, area, 'blade', 1.3);
+  assert.ok(settings.x >= -510 && settings.x <= -470);
+  assert.ok(settings.y + settings.height <= area.y + area.height);
 });
 
 test('settings use vertical space when there is no horizontal room', () => {
-  const area = { x: 0, y: 0, width: 540, height: 1000 };
-  const settings = getPetSettingsBounds({ x: 200, y: 400, width: 210, height: 242 }, area);
-  assert.deepEqual(settings, { x: 200, y: 208, width: 260, height: 180 });
+  const area = { x: 0, y: 0, width: 360, height: 1000 };
+  const settings = getPetSettingsBounds({ x: 75, y: 400, width: 210, height: 242 }, area, 'blade', 1);
+  assert.ok(settings.y >= 621 && settings.y <= 625, 'The panel should fit below the body.');
+  assert.ok(settings.x >= area.x && settings.x + settings.width <= area.x + area.width);
 });
 
 test('settings remain within the work area on a compact display', () => {
@@ -81,6 +65,14 @@ test('settings remain within the work area on a compact display', () => {
   const settings = getPetSettingsBounds({ x: 240, y: 120, width: 210, height: 242 }, area);
   assert.ok(settings.x >= area.x && settings.y >= area.y);
   assert.ok(settings.x + settings.width <= area.x + area.width);
+  assert.ok(settings.y + settings.height <= area.y + area.height);
+});
+
+test('settings remain close to the body at the bottom screen edge', () => {
+  const area = { x: 0, y: 25, width: 1920, height: 1055 };
+  const settings = getPetSettingsBounds({ x: 1686, y: 814, width: 210, height: 242 }, area, 'munch', 1);
+  assert.ok(settings.x >= 1458 && settings.x <= 1462,
+    'Speech avoidance must not push the card away to the transparent window boundary.');
   assert.ok(settings.y + settings.height <= area.y + area.height);
 });
 

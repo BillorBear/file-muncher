@@ -14,7 +14,7 @@
     "test": "tsx --test tests/*.test.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "test:desktop": "npm run build && node scripts/pointer-tracking-regression.mjs && node scripts/smoke.mjs",
-    "test:renderer": "npm run build && node scripts/renderer-regression.mjs && node scripts/pet-interaction-regression.mjs && node scripts/file-drag-regression.mjs",
+    "test:renderer": "npm run build && node scripts/renderer-regression.mjs && node scripts/pet-interaction-regression.mjs && node scripts/file-drag-regression.mjs && node scripts/pet-spacing-regression.mjs",
     "pack:mac": "npm run build && electron-builder --mac dmg --arm64 --x64",
     "pack:win": "npm run build && electron-builder --win nsis --x64",
     "preview": "npm run build && node scripts/preview.mjs"

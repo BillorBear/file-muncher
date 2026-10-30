@@ -10,7 +10,7 @@
 .pet-widget { position: relative; overflow: hidden; border-radius: 16px; }
 .pet-speech {
   position: absolute;
-  top: 4px;
+  bottom: calc(100% - var(--pet-body-top, 100px) + 10px);
   left: 50%;
   transform: translateX(-50%);
   border: 1px solid #d8e0cbb0;
@@ -54,7 +54,7 @@
 .pet-result ul:empty { display: none; }
 .pet-result button { font-size: 10px; color: #718c55; display: block; margin: 10px 0 0 auto; background: #edf2e2; border-radius: 7px; padding: 6px 12px; }
 .pet-view[data-theme=void] .pet-scene { filter: drop-shadow(0 0 9px #b5c7da99); }
-.pet-reaction { position: absolute; top: 45px; left: 25%; width: 50%; pointer-events: none; opacity: 0; z-index: 5; }
+.pet-reaction { position: absolute; top: calc(var(--pet-body-top, 100px) - 24px); left: 25%; width: 50%; pointer-events: none; opacity: 0; z-index: 5; }
 .pet-view[data-theme=blade] .pet-reaction { display: none; }
 .reaction-heart { fill: #d28a80; }
 .reaction-spark { fill: #b7bf72; }

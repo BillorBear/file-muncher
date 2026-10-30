@@ -109,6 +109,8 @@ async function look(page) {
       x: Number.parseFloat(style.getPropertyValue('--look-x')),
       y: Number.parseFloat(style.getPropertyValue('--look-y')),
       angle: Number.parseFloat(style.getPropertyValue('--aim-angle')),
+      facing: Number.parseFloat(style.getPropertyValue('--turret-facing')),
+      travel: Number.parseFloat(style.getPropertyValue('--tank-travel-y')),
       transform: gaze ? getComputedStyle(gaze).transform : undefined,
     };
   });
@@ -122,6 +124,19 @@ async function assertNoFileCalls(page) {
 
 try {
   for (const view of ['main', 'pet']) {
+    await run(`${view}: ordinary pointer movement and text drags never move the pet gaze`, async page => {
+      for (const theme of themes) {
+        await page.evaluate(theme => window.fileDragTest.setPreferences({ theme }), theme);
+        await page.mouse.move(40, 40);
+        await page.mouse.move(400, 400);
+        assert.notEqual(await page.locator('#drop-zone').getAttribute('data-looking'), 'true', `${theme} must ignore ordinary pointer movement.`);
+        assert.notEqual(await page.locator('#drop-zone').getAttribute('data-tracking'), 'true');
+        await drag(page, 'dragover', { target: '#creature', files: false });
+        assert.notEqual(await page.locator('#drop-zone').getAttribute('data-looking'), 'true', 'Text drags must not activate gaze.');
+      }
+      await assertNoFileCalls(page);
+    }, view);
+
     await run(`${view}: every pet looks toward files before they reach the drop target`, async page => {
       await page.evaluate(() => window.fileDragTest.setPreferences({ reduceMotion: true }));
       for (const theme of themes) {
@@ -136,8 +151,12 @@ try {
         const right = await look(page);
         assert.ok(right.x > 0 && right.y > 0, `${theme} should look down and right.`);
         assert.ok(left.transform && right.transform && left.transform !== right.transform, `${theme} must visibly move its gaze, not only update state.`);
-        if (theme === 'blade') assert.ok(Math.cos(left.angle * Math.PI / 180) < 0 && Math.cos(right.angle * Math.PI / 180) > 0,
-          'The turret should aim at either side of the tank without relying on wrapped angles.');
+        if (theme === 'blade') {
+          assert.equal(left.facing, -1);
+          assert.equal(right.facing, 1);
+          assert.ok(Math.abs(left.angle) <= 12 && Math.abs(right.angle) <= 12, 'The turret must stay upright.');
+          assert.ok(left.travel < 0 && right.travel > 0, 'The tank body should travel toward vertical targets.');
+        }
         await drag(page, 'dragend', { target: 'document' });
         assert.notEqual(await page.locator('#drop-zone').getAttribute('data-tracking'), 'true');
       }
@@ -187,6 +206,27 @@ try {
       assert.notEqual(await page.locator('#drop-zone').getAttribute('data-interacting'), 'true');
     }, view);
   }
+
+  await run('tank stays upright below the pointer and resets its pose when file drag ends', async page => {
+    await page.evaluate(() => window.fileDragTest.setPreferences({ reduceMotion: true }));
+    await drag(page, 'dragover', { target: '#creature', x: 0.9, y: 0.2 });
+    const above = await look(page);
+    await drag(page, 'dragover', { target: '#creature', x: 0.9, y: 0.9 });
+    const below = await look(page);
+    assert.equal(above.angle, below.angle, 'Vertical movement must not rotate the turret.');
+    assert.equal(above.facing, below.facing);
+    assert.ok(above.travel < 0 && below.travel > 0);
+    const matrix = await page.locator('.tank-turret').evaluate(node => {
+      const transform = new DOMMatrix(getComputedStyle(node).transform);
+      return { upright: transform.d };
+    });
+    assert.ok(matrix.upright > 0.9, 'The turret roof must remain above its pivot.');
+    await drag(page, 'dragend', { target: 'document' });
+    assert.notEqual(await page.locator('#drop-zone').getAttribute('data-looking'), 'true');
+    assert.equal(await page.locator('#creature').evaluate(node => node.style.getPropertyValue('--tank-travel-y')), '');
+    await page.mouse.move(400, 450);
+    assert.notEqual(await page.locator('#drop-zone').getAttribute('data-looking'), 'true');
+  });
 
   await run('dropping fires once, ignores new file drags while busy, and then clears tracking', async page => {
     await page.evaluate(() => window.fileDragTest.holdExecution());

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, expect } from '@playwright/test';
 
-const profile = await mkdtemp(join(tmpdir(), 'file-muncher-pointer-'));
+const profile = await mkdtemp(join(tmpdir(), 'file-muncher-file-drag-'));
 let desktop;
 const errors = [];
 
@@ -20,70 +20,75 @@ try {
   const pet = desktop.windows().find(page => new URL(page.url()).searchParams.get('view') === 'pet');
   assert.ok(pet);
   await pet.locator('#creature svg').waitFor();
-  await pet.evaluate(() => {
-    window.pointerTest = { points: [], unsubscribe: null };
-    window.pointerTest.unsubscribe = window.shredder.onPointerTarget(point => {
-      window.pointerTest.points.push(point);
-    });
-  });
-  const initial = await desktop.evaluate(({ BrowserWindow, screen }) => {
-    const window = BrowserWindow.getAllWindows().find(item => item.webContents.getURL().endsWith('view=pet'));
-    globalThis.pointerTest = { cursor: { x: -1900, y: -250 }, reads: 0 };
+  await pet.evaluate(() => window.shredder.updatePreferences({ theme: 'blade', reduceMotion: true }));
+  await desktop.evaluate(({ screen }) => {
+    globalThis.pointerTest = { reads: 0 };
     screen.getCursorScreenPoint = () => {
       globalThis.pointerTest.reads += 1;
-      return { ...globalThis.pointerTest.cursor };
+      return { x: -1900, y: -250 };
     };
-    window.webContents.setZoomFactor(1.5);
-    return window.getContentBounds();
   });
-  await expect.poll(() => pet.evaluate(() => window.pointerTest.points.at(-1))).toEqual({
-    x: (-1900 - initial.x) / 1.5, y: (-250 - initial.y) / 1.5,
-  });
-  const firstCount = await pet.evaluate(() => window.pointerTest.points.length);
-  await desktop.evaluate(async () => { await new Promise(resolve => setTimeout(resolve, 120)); });
-  assert.equal(await pet.evaluate(() => window.pointerTest.points.length), firstCount,
-    'Stationary cursor targets should not create repeated IPC events.');
-
-  await desktop.evaluate(({ BrowserWindow }) => {
-    for (const window of BrowserWindow.getAllWindows()) window.hide();
-  });
-  const hiddenReads = await desktop.evaluate(() => globalThis.pointerTest.reads);
+  await pet.mouse.move(10, 10);
+  await pet.mouse.move(140, 160);
   await desktop.evaluate(async () => { await new Promise(resolve => setTimeout(resolve, 160)); });
-  assert.equal(await desktop.evaluate(() => globalThis.pointerTest.reads), hiddenReads,
-    'Hiding both pet and main windows must stop desktop cursor polling.');
-  assert.equal(await pet.evaluate(() => window.pointerTest.points.length), firstCount,
-    'Hidden windows must not receive pointer targets.');
-
-  const restored = await desktop.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows().find(item => item.webContents.getURL().endsWith('view=pet'));
-    globalThis.pointerTest.cursor = { x: 1800, y: 1000 };
-    window.showInactive();
-    return window.getContentBounds();
+  assert.equal(await desktop.evaluate(() => globalThis.pointerTest.reads), 0, 'Idle windows must not poll the global cursor.');
+  assert.notEqual(await pet.locator('#drop-zone').getAttribute('data-looking'), 'true');
+  await pet.evaluate(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(['preview only'], 'not-dropped.txt'));
+    document.querySelector('#creature').dispatchEvent(new DragEvent('dragover', {
+      bubbles: true, dataTransfer: transfer, clientX: 160, clientY: 180,
+    }));
   });
-  await expect.poll(() => pet.evaluate(() => window.pointerTest.points.at(-1))).toEqual({
-    x: (1800 - restored.x) / 1.5, y: (1000 - restored.y) / 1.5,
-  });
-  assert.ok(await desktop.evaluate(() => globalThis.pointerTest.reads) > hiddenReads,
-    'Showing the pet must resume cursor polling while the main window remains hidden.');
+  await expect(pet.locator('#speech')).toHaveText('stand by !');
+  assert.equal(await pet.locator('#drop-zone').getAttribute('data-tracking'), 'true');
+  await pet.evaluate(() => document.dispatchEvent(new Event('dragend')));
+  assert.notEqual(await pet.locator('#drop-zone').getAttribute('data-looking'), 'true');
+  assert.equal((await pet.evaluate(() => window.shredder.getState())).stats.files, 0);
 
-  const subscribedCount = await pet.evaluate(() => {
-    window.pointerTest.unsubscribe();
-    return window.pointerTest.points.length;
-  });
-  await desktop.evaluate(() => { globalThis.pointerTest.cursor = { x: 1200, y: 500 }; });
-  await desktop.evaluate(async () => { await new Promise(resolve => setTimeout(resolve, 120)); });
-  assert.equal(await pet.evaluate(() => window.pointerTest.points.length), subscribedCount,
-    'Unsubscribing must remove the preload callback.');
-
+  await pet.evaluate(() => window.shredder.openPetSettings());
+  await expect.poll(() => desktop.windows().some(page => page.url().includes('view=pet-settings'))).toBe(true);
+  const settings = desktop.windows().find(page => page.url().includes('view=pet-settings'));
+  await settings.locator('#pet-size').waitFor();
+  await expect.poll(() => desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=pet-settings'))?.isFocused())).toBe(true);
+  await settings.locator('#pet-size').click();
+  assert.equal(await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=pet-settings'))?.isVisible()), true,
+    'Clicking inside the card must leave it open.');
   await desktop.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().find(window => window.webContents.getURL().endsWith('view=pet')).destroy();
+    const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=pet-settings'));
+    globalThis.delayedDismissals = [];
+    globalThis.originalSettingsSend = window.webContents.send.bind(window.webContents);
+    window.webContents.send = (channel, ...args) => {
+      if (channel === 'shredder:pet-settings-dismiss-requested') globalThis.delayedDismissals.push(args[0]);
+      else globalThis.originalSettingsSend(channel, ...args);
+    };
   });
-  const closedReads = await desktop.evaluate(() => globalThis.pointerTest.reads);
-  await desktop.evaluate(async () => { await new Promise(resolve => setTimeout(resolve, 160)); });
-  assert.equal(await desktop.evaluate(() => globalThis.pointerTest.reads), closedReads,
-    'Destroying the last visible pet window must stop cursor polling.');
+  for (const [index, action] of ['refocus', 'reopen'].entries()) {
+    await desktop.evaluate(({ app, BrowserWindow }) => {
+      const main = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=main'));
+      app.focus({ steal: true }); main.show(); main.focus();
+    });
+    await expect.poll(() => desktop.evaluate(() => globalThis.delayedDismissals.length)).toBe(index + 1);
+    const requestId = await desktop.evaluate(() => globalThis.delayedDismissals.at(-1));
+    if (action === 'reopen') await pet.evaluate(() => window.shredder.openPetSettings());
+    else await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()
+      .find(window => window.webContents.getURL().includes('view=pet-settings')).focus());
+    await expect.poll(() => desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()
+      .find(window => window.webContents.getURL().includes('view=pet-settings'))?.isFocused())).toBe(true);
+    await settings.evaluate(requestId => window.shredder.dismissPetSettings(requestId), requestId);
+    assert.equal(settings.isClosed(), false, `A stale dismissal must not close settings after ${action}.`);
+  }
+  await desktop.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=pet-settings'));
+    window.webContents.send = globalThis.originalSettingsSend;
+  });
+  await desktop.evaluate(({ app, BrowserWindow }) => {
+    const main = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=main'));
+    app.focus({ steal: true }); main.show(); main.focus();
+  });
+  await expect.poll(() => desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(window => window.webContents.getURL().includes('view=pet-settings') && window.isVisible()))).toBe(false);
   assert.deepEqual(errors, []);
-  console.log('PASS: native pointer IPC, CSS zoom, outside-window targets, changed-only events, hidden/closed lifecycle, listener cleanup');
+  console.log('PASS: no idle cursor polling or gaze, real file-drag readiness, drag cleanup, inside-card interaction, stale-dismissal cancellation, outside-focus dismissal');
 } finally {
   if (desktop) await desktop.close();
   await rm(profile, { recursive: true, force: true });

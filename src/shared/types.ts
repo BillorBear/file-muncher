@@ -68,10 +68,11 @@ export interface DesktopApi {
   executeBatch(token: string): Promise<BatchResult>;
   updatePreferences(patch: Partial<Preferences>): Promise<AppState>;
   onState(listener: (state: AppState) => void): () => void;
-  onPointerTarget(listener: (point: PointerTarget) => void): () => void;
+  onPetSettingsDismissRequested(listener: (requestId: number) => void): () => void;
   openMain(): Promise<void>;
   openPetSettings(): Promise<void>;
   closePetSettings(): Promise<void>;
+  dismissPetSettings(requestId: number): Promise<void>;
   beginPetDrag(): Promise<void>;
   movePetDrag(): void;
   endPetDrag(): Promise<void>;

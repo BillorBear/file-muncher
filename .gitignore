@@ -3,6 +3,7 @@ dist/
 release/
 test-results/
 .local-data/
+.openidea/
 .env
 .env.*
 !.env.example

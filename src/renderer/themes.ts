@@ -99,8 +99,9 @@ function tankScene(prefix: string): string {
     <linearGradient id="${prefix}-armor" x1=".25" y1="0" x2=".75" y2="1"><stop stop-color="#bed19a"/><stop offset="1" stop-color="#81975e"/></linearGradient>
     <linearGradient id="${prefix}-turret" x1=".2" y1="0" x2=".8" y2="1"><stop stop-color="#cbd9ad"/><stop offset="1" stop-color="#95ac70"/></linearGradient>
   </defs>
-  <ellipse class="scene-shadow" cx="210" cy="285" rx="107" ry="12" fill="#52603e" opacity=".13"/>
   <g class="ambient-specks" fill="#b5c795"><path d="m106 155 3-7 3 7 7 3-7 3-3 7-3-7-7-3ZM292 113l2-5 2 5 5 2-5 2-2 5-2-5-5-2Z"/><circle cx="122" cy="112" r="2"/><circle cx="319" cy="248" r="2.5"/></g>
+  <g class="tank-travel">
+  <ellipse class="scene-shadow" cx="210" cy="285" rx="107" ry="12" fill="#52603e" opacity=".13"/>
   <g class="tank-character">
     <g class="tank-chassis">
       <rect x="105" y="229" width="210" height="48" rx="24" fill="#4b5847" stroke="#3d4c39" stroke-width="3.5"/>
@@ -136,6 +137,7 @@ function tankScene(prefix: string): string {
   <g class="tank-target">
     ${meal(354, 184)}
     <g transform="translate(354 184)"><circle class="tank-impact" r="22" fill="none" stroke="#d9ad5f" stroke-width="3"/>${fragments(['#95aa70', '#e2c278', '#f5e9c8', '#acb7a0'])}</g>
+  </g>
   </g>
   ${statusMarks()}`;
 }

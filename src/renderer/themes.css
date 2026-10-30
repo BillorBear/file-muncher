@@ -146,12 +146,17 @@
 .creature-scene .tank-eyes { transform-origin: 210px 216px; animation: munch-blink 6.2s infinite; }
 .creature-scene .tank-wheel { transform-box: fill-box; transform-origin: center; }
 
-/* Both the barrel and its target share the SVG pivot (210, 184), facing right at zero. */
+.creature-scene .tank-travel {
+  transform: translateY(var(--tank-travel-y, 0px));
+  transition: transform 140ms ease-out;
+}
+
+/* Mirror horizontally to face left while keeping the turret roof upright. */
 .creature-scene .tank-turret,
 .creature-scene .tank-target {
   transform-box: view-box;
   transform-origin: 210px 184px;
-  transform: rotate(var(--aim-angle, -20deg));
+  transform: scaleX(var(--turret-facing, 1)) rotate(var(--aim-angle, -12deg));
   transition: transform 110ms ease-out;
 }
 
