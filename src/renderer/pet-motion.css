@@ -1,0 +1,190 @@
+.pet-scene {
+  --pet-drag-sign: 0;
+}
+
+.pet-scene[data-drag-direction="left"] { --pet-drag-sign: -1; }
+.pet-scene[data-drag-direction="right"] { --pet-drag-sign: 1; }
+
+/* Motion stays below the parent that owns the user's size and growth scale. */
+.pet-scene[data-dragging="true"] .creature-scene {
+  transform-origin: 50% 44%;
+  transform: translateY(-5px) rotate(calc(var(--pet-drag-sign) * -5deg));
+  transition: transform 130ms ease-out;
+}
+
+.pet-scene[data-dragging="true"] .scene-shadow {
+  animation: none;
+  opacity: .055;
+  transform: scaleX(.72);
+}
+
+.pet-scene[data-dragging="true"] .munch-character,
+.pet-scene[data-dragging="true"] .pixel-character,
+.pet-scene[data-dragging="true"] .tank-character,
+.pet-scene[data-dragging="true"] .void-system,
+.pet-scene[data-dragging="true"] .paper-machine {
+  animation: none;
+}
+
+.pet-scene[data-dragging="true"] .munch-arm-left { transform: rotate(-24deg); }
+.pet-scene[data-dragging="true"] .munch-arm-right { transform: rotate(24deg); }
+.pet-scene[data-dragging="true"] .munch-character > ellipse:nth-of-type(1),
+.pet-scene[data-dragging="true"] .munch-character > ellipse:nth-of-type(2) {
+  transform-box: fill-box;
+  transform-origin: center top;
+  transform: translateY(5px) rotate(calc(var(--pet-drag-sign) * 13deg));
+}
+
+.pet-scene[data-dragging="true"]:not([data-drag-direction="none"]) .munch-character > ellipse:nth-of-type(1) {
+  animation: pet-munch-feet 430ms ease-in-out infinite alternate;
+}
+
+.pet-scene[data-dragging="true"]:not([data-drag-direction="none"]) .munch-character > ellipse:nth-of-type(2) {
+  animation: pet-munch-feet 430ms ease-in-out -430ms infinite alternate;
+}
+
+.pet-scene[data-dragging="true"] .pixel-character {
+  transform: rotate(calc(var(--pet-drag-sign) * 3deg));
+}
+
+.pet-scene[data-dragging="true"] .pixel-arm-left { transform: rotate(calc(var(--pet-drag-sign) * -18deg)); }
+.pet-scene[data-dragging="true"] .pixel-arm-right { transform: rotate(calc(var(--pet-drag-sign) * -18deg)); }
+.pet-scene[data-dragging="true"]:not([data-drag-direction="none"]) .pixel-character {
+  animation: pet-pixel-step 300ms steps(2, end) infinite;
+}
+
+.pet-scene[data-dragging="true"] .tank-character {
+  transform: rotate(calc(var(--pet-drag-sign) * 3deg));
+}
+
+.pet-scene[data-dragging="true"]:not([data-drag-direction="none"]) .tank-wheel {
+  animation: scene-turn .8s linear infinite;
+}
+
+.pet-scene[data-dragging="true"][data-drag-direction="left"] .tank-wheel { animation-direction: reverse; }
+
+.pet-scene[data-dragging="true"] .void-system {
+  transform: rotate(calc(var(--pet-drag-sign) * -13deg)) scaleY(.96);
+}
+
+.pet-scene[data-dragging="true"] .void-orbits { animation: none; }
+.pet-scene[data-dragging="true"]:not([data-drag-direction="none"]) .void-orbits {
+  animation: pet-void-orbit 2.6s linear infinite;
+}
+
+.pet-scene[data-dragging="true"][data-drag-direction="left"] .void-orbits { animation-direction: reverse; }
+.pet-scene[data-dragging="true"] .paper-crank {
+  animation: none;
+  transform: rotate(calc(var(--pet-drag-sign) * -28deg));
+}
+
+.pet-scene[data-dragging="true"] .paper-strip {
+  transform-box: fill-box;
+  transform-origin: center top;
+  transform: rotate(calc(var(--pet-drag-sign) * 15deg));
+}
+
+.pet-scene[data-dragging="true"]:not([data-drag-direction="none"]) .paper-crank {
+  animation: pet-paper-handle 450ms ease-in-out infinite alternate;
+}
+
+.pet-scene[data-dragging="true"]:not([data-drag-direction="none"]) .paper-strip {
+  animation: pet-paper-trail 550ms ease-in-out infinite alternate;
+  animation-delay: var(--strip-delay);
+}
+
+.pet-scene[data-landing="true"] .creature-scene {
+  transform-origin: 50% 82%;
+  animation: pet-soft-landing 350ms ease-out;
+}
+
+.pet-scene[data-landing="true"] .creature-scene[data-theme="pixel"] {
+  animation: pet-pixel-landing 350ms steps(4, end);
+}
+
+.pet-scene[data-landing="true"] .creature-scene[data-theme="blade"] {
+  animation: pet-tank-landing 350ms ease-out;
+}
+
+.pet-scene[data-landing="true"] .creature-scene[data-theme="void"] {
+  animation: pet-void-landing 350ms ease-out;
+}
+
+.pet-scene[data-landing="true"] .creature-scene[data-theme="paper"] {
+  animation: pet-paper-landing 350ms ease-out;
+}
+
+@keyframes pet-munch-feet {
+  from { transform: translateY(4px) rotate(calc(var(--pet-drag-sign) * -12deg)); }
+  to { transform: translateY(8px) rotate(calc(var(--pet-drag-sign) * 19deg)); }
+}
+
+@keyframes pet-pixel-step {
+  0%, 100% { transform: translateY(-1px) rotate(calc(var(--pet-drag-sign) * 3deg)); }
+  50% { transform: translateY(3px) rotate(calc(var(--pet-drag-sign) * -2deg)); }
+}
+
+@keyframes pet-void-orbit { to { transform: rotate(360deg); } }
+
+@keyframes pet-paper-handle {
+  from { transform: rotate(calc(var(--pet-drag-sign) * -18deg)); }
+  to { transform: rotate(calc(var(--pet-drag-sign) * -38deg)); }
+}
+
+@keyframes pet-paper-trail {
+  from { transform: rotate(calc(var(--pet-drag-sign) * 8deg)); }
+  to { transform: rotate(calc(var(--pet-drag-sign) * 24deg)); }
+}
+
+@keyframes pet-soft-landing {
+  0% { transform: translateY(-5px) scale(1, 1.03); }
+  35% { transform: translateY(3px) scale(1.07, .92); }
+  70% { transform: translateY(-2px) scale(.98, 1.02); }
+  100% { transform: none; }
+}
+
+@keyframes pet-pixel-landing {
+  0% { transform: translateY(-5px); }
+  40% { transform: translateY(3px) scaleY(.96); }
+  70% { transform: translateY(-2px); }
+  100% { transform: none; }
+}
+
+@keyframes pet-tank-landing {
+  0% { transform: translateY(-5px); }
+  40% { transform: translateY(3px) scale(1.03, .94); }
+  70% { transform: translateY(-1px); }
+  100% { transform: none; }
+}
+
+@keyframes pet-void-landing {
+  0% { transform: translateY(-5px) rotate(-4deg); }
+  55% { transform: translateY(2px) rotate(3deg) scale(1.03, .98); }
+  100% { transform: none; }
+}
+
+@keyframes pet-paper-landing {
+  0% { transform: translateY(-4px) rotate(-2deg); }
+  35% { transform: translateY(2px) rotate(2deg); }
+  65% { transform: rotate(-1deg); }
+  100% { transform: none; }
+}
+
+.reduce-motion .pet-scene[data-dragging="true"] .creature-scene,
+.reduce-motion .pet-scene[data-dragging="true"] .creature-scene *,
+.reduce-motion .pet-scene[data-landing="true"] .creature-scene,
+[data-reduce-motion="true"] .pet-scene[data-dragging="true"] .creature-scene,
+[data-reduce-motion="true"] .pet-scene[data-dragging="true"] .creature-scene *,
+[data-reduce-motion="true"] .pet-scene[data-landing="true"] .creature-scene {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-scene[data-dragging="true"] .creature-scene,
+  .pet-scene[data-dragging="true"] .creature-scene *,
+  .pet-scene[data-landing="true"] .creature-scene {
+    animation: none !important;
+    transition: none !important;
+  }
+}

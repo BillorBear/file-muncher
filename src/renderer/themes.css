@@ -1,0 +1,305 @@
+.creature-scene {
+  width: 100%;
+  aspect-ratio: 21 / 17;
+  position: relative;
+  user-select: none;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.creature-scene svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.creature-scene .scene-shadow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: scene-shadow-breathe 3.8s ease-in-out infinite;
+}
+
+.creature-scene .meal-file,
+.creature-scene .scene-fragment,
+.creature-scene .scene-success,
+.creature-scene .scene-error,
+.creature-scene .tank-muzzle-flash,
+.creature-scene .tank-shot,
+.creature-scene .tank-impact,
+.creature-scene .paper-eyes,
+.creature-scene .void-ripple,
+.creature-scene .munch-mouth-open,
+.creature-scene .munch-happy-eyes {
+  opacity: 0;
+}
+
+.creature-scene .meal-file { transform-box: fill-box; transform-origin: center; }
+.creature-scene .scene-success,
+.creature-scene .scene-error { transition: opacity .2s ease; }
+
+/* Gaze wrappers keep pointer tracking separate from each pet's idle motion. */
+.creature-scene .pet-gaze {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translate(0, 0) rotate(0deg);
+  transition: transform 130ms ease-out;
+}
+
+:is([data-tracking="true"], [data-looking="true"]) .creature-scene .pet-gaze {
+  transform: translate(var(--look-x, 0px), var(--look-y, 0px)) rotate(var(--look-tilt, 0deg));
+}
+
+:is([data-tracking="true"], [data-looking="true"]) .creature-scene .paper-eyes { opacity: 1; }
+:is([data-tracking="true"], [data-looking="true"]) .creature-scene .paper-display-lines { opacity: 0; }
+
+[data-phase="hover"] .creature-scene .meal-file {
+  opacity: 1;
+  animation: meal-hover 1.3s ease-in-out infinite;
+}
+
+[data-phase="processing"] .creature-scene .meal-file {
+  animation: meal-feed 1.45s cubic-bezier(.38, .05, .67, .99) infinite;
+}
+
+[data-phase="processing"] .creature-scene .scene-fragment {
+  animation: scene-fragments 1.45s ease-out infinite;
+  animation-delay: var(--piece-delay);
+}
+
+[data-phase="success"] .creature-scene .scene-success { opacity: 1; }
+[data-phase="success"] .creature-scene .scene-fragment {
+  animation: scene-fragments 1.2s ease-out both;
+  animation-delay: var(--piece-delay);
+}
+
+[data-phase="error"] .creature-scene .scene-error { opacity: 1; }
+[data-phase="error"] .creature-scene .meal-file {
+  opacity: 1;
+  animation: meal-rejected .65s ease-out both;
+}
+
+.creature-scene .munch-character {
+  transform-origin: 210px 276px;
+  animation: munch-breathe 3.8s ease-in-out infinite;
+}
+
+.creature-scene .munch-eyes {
+  transform-origin: 210px 164px;
+  animation: munch-blink 5.7s infinite;
+}
+
+.creature-scene .munch-arm-left { transform-origin: 134px 199px; }
+.creature-scene .munch-arm-right { transform-origin: 286px 199px; }
+.creature-scene .munch-mouth-open { transform-origin: 210px 190px; }
+.creature-scene .ambient-specks { animation: ambient-drift 5s ease-in-out infinite; }
+
+[data-phase="hover"] .creature-scene .munch-character {
+  animation: munch-excited .75s ease-in-out infinite;
+}
+
+[data-phase="hover"] .creature-scene .munch-arm-left { transform: rotate(22deg); }
+[data-phase="hover"] .creature-scene .munch-arm-right { transform: rotate(-22deg); }
+[data-phase="hover"] .creature-scene .munch-mouth-open,
+[data-phase="processing"] .creature-scene .munch-mouth-open { opacity: 1; }
+[data-phase="hover"] .creature-scene .munch-mouth-smile,
+[data-phase="processing"] .creature-scene .munch-mouth-smile { opacity: 0; }
+
+[data-phase="processing"] .creature-scene .munch-character {
+  animation: munch-chew .48s ease-in-out infinite;
+}
+
+[data-phase="processing"] .creature-scene .munch-mouth-open {
+  animation: munch-mouth .48s ease-in-out infinite;
+}
+
+[data-phase="success"] .creature-scene .munch-character { animation: munch-content .7s ease-out; }
+[data-phase="success"] .creature-scene .munch-eyes { opacity: 0; }
+[data-phase="success"] .creature-scene .munch-happy-eyes { opacity: 1; }
+[data-phase="error"] .creature-scene .munch-character { animation: scene-shake .45s ease-in-out; }
+
+.creature-scene .pixel-character {
+  transform-origin: 210px 281px;
+  animation: pixel-idle 3s steps(2, end) infinite;
+}
+
+.creature-scene .pixel-beacon { animation: pixel-beacon 2.4s steps(1, end) infinite; }
+.creature-scene .pixel-scan { animation: pixel-scan 2.8s steps(8, end) infinite; }
+.creature-scene .pixel-arm-left { transform-origin: 127px 177px; }
+.creature-scene .pixel-arm-right { transform-origin: 293px 177px; }
+[data-theme="pixel"] .scene-fragment { width: 7px; height: 7px; rx: 0; }
+
+[data-phase="hover"] .creature-scene .pixel-arm-left { transform: rotate(30deg); }
+[data-phase="hover"] .creature-scene .pixel-arm-right { transform: rotate(-30deg); }
+[data-phase="hover"] .creature-scene .pixel-character { animation: pixel-idle .55s steps(2, end) infinite; }
+[data-phase="processing"] .creature-scene[data-theme="pixel"] .meal-file {
+  animation: pixel-feed 1.4s steps(12, end) infinite;
+}
+
+[data-phase="processing"] .creature-scene .pixel-character { animation: pixel-grind .18s steps(2, end) infinite; }
+[data-phase="processing"] .creature-scene .pixel-teeth { animation: pixel-teeth .24s steps(2, end) infinite; }
+[data-phase="success"] .creature-scene .pixel-character { animation: pixel-celebrate .6s steps(4, end); }
+[data-phase="error"] .creature-scene .pixel-beacon { fill: #c66d53; animation: pixel-beacon .4s steps(1, end) infinite; }
+[data-phase="error"] .creature-scene .pixel-character { animation: scene-shake .45s steps(4, end); }
+
+.creature-scene .tank-character { transform-origin: 210px 275px; animation: tank-idle 4s ease-in-out infinite; }
+.creature-scene .tank-eyes { transform-origin: 210px 216px; animation: munch-blink 6.2s infinite; }
+.creature-scene .tank-wheel { transform-box: fill-box; transform-origin: center; }
+
+/* Both the barrel and its target share the SVG pivot (210, 184), facing right at zero. */
+.creature-scene .tank-turret,
+.creature-scene .tank-target {
+  transform-box: view-box;
+  transform-origin: 210px 184px;
+  transform: rotate(var(--aim-angle, -20deg));
+  transition: transform 110ms ease-out;
+}
+
+.creature-scene .tank-muzzle-flash { transform-origin: 317px 184px; }
+.creature-scene .tank-shot { transform-origin: 324px 184px; }
+.creature-scene .tank-impact { transform-origin: 0 0; }
+:is([data-tracking="true"], [data-looking="true"]) .creature-scene .tank-character,
+[data-phase="hover"] .creature-scene .tank-character { animation: none; }
+
+[data-phase="processing"] .creature-scene[data-theme="blade"],
+[data-interacting="true"] .creature-scene[data-theme="blade"] {
+  --tank-action-duration: 1.2s;
+  --tank-action-count: infinite;
+}
+
+[data-interacting="true"] .creature-scene[data-theme="blade"] {
+  --tank-action-duration: .85s;
+  --tank-action-count: 1;
+}
+
+:is([data-phase="processing"], [data-interacting="true"]) .creature-scene .tank-character { animation: none; }
+:is([data-phase="processing"], [data-interacting="true"]) .creature-scene .tank-recoil {
+  animation: tank-recoil var(--tank-action-duration) ease-out var(--tank-action-count);
+}
+
+:is([data-phase="processing"], [data-interacting="true"]) .creature-scene .tank-chassis {
+  animation: tank-rumble var(--tank-action-duration) ease-out var(--tank-action-count);
+}
+
+:is([data-phase="processing"], [data-interacting="true"]) .creature-scene .tank-muzzle-flash {
+  animation: tank-muzzle-flash var(--tank-action-duration) ease-out var(--tank-action-count);
+}
+
+:is([data-phase="processing"], [data-interacting="true"]) .creature-scene .tank-shot {
+  animation: tank-shot var(--tank-action-duration) ease-out var(--tank-action-count);
+}
+
+[data-phase="processing"] .creature-scene[data-theme="blade"] .meal-file { animation: tank-file 1.2s ease-in infinite; }
+[data-phase="processing"] .creature-scene .tank-impact { animation: tank-impact 1.2s ease-out infinite; }
+[data-phase="processing"] .creature-scene[data-theme="blade"] .scene-fragment {
+  animation: tank-fragments 1.2s ease-out infinite;
+  animation-delay: 0ms;
+}
+
+[data-phase="success"] .creature-scene .tank-character { animation: tank-celebrate .55s ease-out; }
+[data-phase="error"] .creature-scene .tank-character { animation: scene-shake .45s ease-in-out; }
+
+.creature-scene .void-system { transform-origin: 210px 174px; animation: void-float 5s ease-in-out infinite; }
+.creature-scene .void-orbits { transform-origin: 210px 174px; animation: void-orbit 18s linear infinite; }
+.creature-scene .void-stars { animation: void-stars 4s ease-in-out infinite; }
+.creature-scene .void-core-glint { transform-origin: 210px 174px; animation: void-orbit 24s linear infinite; }
+.creature-scene .void-ripple { transform-origin: 210px 174px; }
+[data-phase="hover"] .creature-scene .void-system { animation: void-hover 1.4s ease-in-out infinite; }
+[data-phase="hover"] .creature-scene .void-orbits { animation-duration: 3s; }
+[data-phase="processing"] .creature-scene[data-theme="void"] .meal-file { animation: void-feed 1.8s ease-in infinite; }
+[data-phase="processing"] .creature-scene .void-system { animation: void-consume 1.8s ease-in-out infinite; }
+[data-phase="processing"] .creature-scene .void-orbits { animation-duration: 1.8s; }
+[data-phase="processing"] .creature-scene[data-theme="void"] .scene-fragment { animation: void-dust 1.8s ease-in infinite; animation-delay: var(--piece-delay); }
+[data-phase="success"] .creature-scene .void-ripple { animation: void-ripple .95s ease-out; }
+[data-phase="error"] .creature-scene .void-core { stroke: #c49470; }
+
+.creature-scene .paper-machine { transform-origin: 210px 276px; animation: paper-idle 4s ease-in-out infinite; }
+.creature-scene .paper-crank { transform-origin: 300px 190px; }
+.creature-scene .paper-roller { transform-box: fill-box; transform-origin: center; }
+.creature-scene .paper-strip { opacity: .65; transform-box: fill-box; transform-origin: center top; }
+.creature-scene .paper-decoration { animation: ambient-drift 4s ease-in-out infinite; }
+[data-phase="hover"] .creature-scene .paper-crank { transform: rotate(-20deg); }
+[data-phase="hover"] .creature-scene .paper-light { fill: #87ae6e; }
+[data-phase="processing"] .creature-scene[data-theme="paper"] .meal-file { animation: paper-feed 1.5s linear infinite; }
+[data-phase="processing"] .creature-scene .paper-roller { animation: scene-turn .65s linear infinite; }
+[data-phase="processing"] .creature-scene .paper-crank { animation: paper-crank .75s ease-in-out infinite; }
+[data-phase="processing"] .creature-scene .paper-machine { animation: paper-rumble .24s ease-in-out infinite; }
+[data-phase="processing"] .creature-scene .paper-strip { animation: paper-strip .85s ease-in infinite; animation-delay: var(--strip-delay); }
+[data-phase="success"] .creature-scene .paper-machine { animation: paper-finish .5s ease-out; }
+[data-phase="success"] .creature-scene .paper-light { fill: #87ae6e; }
+[data-phase="error"] .creature-scene .paper-light { fill: #c76e50; }
+[data-phase="error"] .creature-scene .paper-machine { animation: scene-shake .45s ease-in-out; }
+
+@keyframes scene-shadow-breathe { 0%, 100% { transform: scaleX(1); opacity: .13; } 50% { transform: scaleX(.94); opacity: .1; } }
+@keyframes ambient-drift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes meal-hover { 0%, 100% { transform: translateY(0) rotate(-8deg); } 50% { transform: translateY(-7px) rotate(1deg); } }
+@keyframes meal-feed { 0% { opacity: 0; transform: translateY(-16px) rotate(-14deg) scale(.88); } 13% { opacity: 1; } 60% { opacity: 1; transform: translateY(93px) rotate(7deg) scale(.8); } 78%, 100% { opacity: 0; transform: translateY(122px) rotate(14deg) scale(.08); } }
+@keyframes meal-rejected { 0% { opacity: 0; transform: translateY(67px) scale(.3); } 65% { opacity: 1; transform: translateY(-7px) rotate(-12deg); } 100% { opacity: 1; transform: rotate(-7deg); } }
+@keyframes scene-fragments { 0%, 30% { opacity: 0; transform: translate(0, 0) rotate(0); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--piece-x), var(--piece-y)) rotate(var(--piece-turn)); } }
+@keyframes scene-shake { 0%, 100% { transform: translateX(0); } 25%, 75% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
+@keyframes scene-turn { to { transform: rotate(360deg); } }
+@keyframes munch-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025, .975) translateY(1px); } }
+@keyframes munch-blink { 0%, 43%, 47%, 100% { transform: scaleY(1); } 45% { transform: scaleY(.08); } }
+@keyframes munch-excited { 0%, 100% { transform: translateY(0) scale(1.02, .98); } 50% { transform: translateY(-6px) scale(.98, 1.03); } }
+@keyframes munch-chew { 0%, 100% { transform: scale(1.015, .99) rotate(-1deg); } 50% { transform: scale(.99, 1.02) rotate(1deg); } }
+@keyframes munch-mouth { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.1, .72); } }
+@keyframes munch-content { 0% { transform: scale(1.07, .93); } 45% { transform: translateY(-9px) scale(.96, 1.04); } 100% { transform: scale(1); } }
+@keyframes pixel-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes pixel-beacon { 0%, 65%, 100% { opacity: 1; } 70%, 80% { opacity: .45; } }
+@keyframes pixel-scan { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(36px); } }
+@keyframes pixel-feed { 0% { opacity: 0; transform: translateY(0) scale(.8); } 12% { opacity: 1; } 60% { opacity: 1; transform: translateY(126px) scale(.85); } 85%, 100% { opacity: 0; transform: translateY(177px) scale(.7, .05); } }
+@keyframes pixel-grind { 0%, 100% { transform: translateX(-1px); } 50% { transform: translateX(1px); } }
+@keyframes pixel-teeth { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
+@keyframes pixel-celebrate { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+@keyframes tank-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes tank-recoil { 0%, 17%, 65%, 100% { transform: translateX(0); } 25% { transform: translateX(-11px); } 42% { transform: translateX(2px); } }
+@keyframes tank-rumble { 0%, 18%, 55%, 100% { transform: translateY(0); } 26% { transform: translateY(2px); } 36% { transform: translateY(-1px); } }
+@keyframes tank-muzzle-flash { 0%, 18% { opacity: 0; transform: scale(.2); } 22% { opacity: 1; transform: scale(1.15); } 36%, 100% { opacity: 0; transform: scale(.7); } }
+@keyframes tank-shot { 0%, 21% { opacity: 0; transform: scaleX(.15); } 24% { opacity: 1; transform: scaleX(1); } 32%, 100% { opacity: 0; transform: translateX(24px) scaleX(.25); } }
+@keyframes tank-file { 0% { opacity: 0; transform: scale(.6) rotate(-8deg); } 12%, 29% { opacity: 1; transform: scale(.85) rotate(-3deg); } 34% { opacity: 1; transform: scale(1.05) rotate(5deg); } 39%, 100% { opacity: 0; transform: scale(.1) rotate(15deg); } }
+@keyframes tank-impact { 0%, 28% { opacity: 0; transform: scale(.3); } 34% { opacity: .9; } 63%, 100% { opacity: 0; transform: scale(1.8); } }
+@keyframes tank-fragments { 0%, 31% { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(.6); } 37% { opacity: 1; } 88%, 100% { opacity: 0; transform: translate(calc(var(--piece-x) * .55), calc(var(--piece-y) * .6)) rotate(var(--piece-turn)) scale(.6); } }
+@keyframes tank-celebrate { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-5px) rotate(-1deg); } 65% { transform: translateY(1px) rotate(1deg); } }
+@keyframes void-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
+@keyframes void-orbit { to { transform: rotate(360deg); } }
+@keyframes void-stars { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes void-hover { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes void-feed { 0% { opacity: 0; transform: translate(10px, -15px) rotate(20deg) scale(.8); } 12% { opacity: 1; } 35% { transform: translate(26px, 64px) rotate(120deg) scale(.7); } 62% { opacity: 1; transform: translate(-67px, 137px) rotate(260deg) scale(.5); } 85%, 100% { opacity: 0; transform: translate(-80px, 97px) rotate(480deg) scale(0); } }
+@keyframes void-consume { 0%, 100% { transform: scale(1) rotate(-1deg); } 70% { transform: scale(1.07) rotate(4deg); } }
+@keyframes void-dust { 0% { opacity: 0; transform: translate(var(--piece-x), var(--piece-y)) rotate(var(--piece-turn)); } 15% { opacity: .7; } 90%, 100% { opacity: 0; transform: translate(0, 0) rotate(0) scale(0); } }
+@keyframes void-ripple { 0% { opacity: .8; transform: scale(.85); } 100% { opacity: 0; transform: scale(1.8); } }
+@keyframes paper-idle { 0%, 100% { transform: rotate(-.5deg); } 50% { transform: rotate(.5deg); } }
+@keyframes paper-feed { 0% { opacity: 0; transform: translateY(-10px) rotate(-4deg); } 12% { opacity: 1; } 55% { opacity: 1; transform: translateY(55px) rotate(0) scaleY(.9); } 83%, 100% { opacity: 0; transform: translateY(75px) scaleY(.02); } }
+@keyframes paper-crank { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(15deg); } }
+@keyframes paper-rumble { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.5px); } }
+@keyframes paper-strip { 0% { opacity: .9; transform: translateY(-2px) scaleY(.4); } 70% { opacity: .9; } 100% { opacity: 0; transform: translateY(36px) scaleY(1.1); } }
+@keyframes paper-finish { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(-2deg); } 65% { transform: rotate(2deg); } }
+
+.mini-scene .creature-scene { max-width: 180px; margin-inline: auto; }
+.mini-scene .creature-scene * { animation: none !important; transition: none !important; }
+.mini-scene .creature-scene .meal-file,
+.mini-scene .creature-scene .scene-fragment,
+.mini-scene .creature-scene .scene-success,
+.mini-scene .creature-scene .scene-error,
+.mini-scene .creature-scene .tank-muzzle-flash,
+.mini-scene .creature-scene .tank-shot,
+.mini-scene .creature-scene .tank-impact,
+.mini-scene .creature-scene .void-ripple { opacity: 0 !important; }
+.pet-scene .creature-scene { width: 100%; }
+
+.reduce-motion .creature-scene *,
+[data-reduce-motion="true"] .creature-scene * { animation: none !important; transition: none !important; }
+.reduce-motion [data-phase="processing"] .creature-scene .meal-file,
+[data-reduce-motion="true"] [data-phase="processing"] .creature-scene .meal-file,
+[data-phase="processing"].reduce-motion .creature-scene .meal-file,
+[data-phase="processing"][data-reduce-motion="true"] .creature-scene .meal-file { opacity: 1; }
+
+:is(.reduce-motion, [data-reduce-motion="true"]) :is([data-phase="processing"], [data-interacting="true"]) .creature-scene .tank-muzzle-flash {
+  opacity: .65;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creature-scene * { animation: none !important; transition: none !important; }
+  [data-phase="processing"] .creature-scene .meal-file { opacity: 1; }
+  :is([data-phase="processing"], [data-interacting="true"]) .creature-scene .tank-muzzle-flash { opacity: .65; }
+}

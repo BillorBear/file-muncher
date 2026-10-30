@@ -1,0 +1,72 @@
+{
+  "name": "file-muncher",
+  "productName": "file muncher",
+  "version": "1.0.2",
+  "description": "A playful offline file shredder and desktop pet",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.cjs",
+  "author": "File Muncher",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run build",
+    "test:desktop": "npm run build && node scripts/pointer-tracking-regression.mjs && node scripts/smoke.mjs",
+    "test:renderer": "npm run build && node scripts/renderer-regression.mjs && node scripts/pet-interaction-regression.mjs && node scripts/file-drag-regression.mjs",
+    "pack:mac": "npm run build && electron-builder --mac dmg --arm64 --x64",
+    "pack:win": "npm run build && electron-builder --win nsis --x64",
+    "preview": "npm run build && node scripts/preview.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.0.0",
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "build": {
+    "appId": "com.filemuncher.desktop",
+    "productName": "file muncher",
+    "artifactName": "File-Muncher-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "assets/icon.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "notarize": false,
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis"
+      ],
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ]
+    }
+  }
+}
