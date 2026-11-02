@@ -7,7 +7,10 @@ await Promise.all([
   build({ entryPoints: ['src/main/preload.ts'], outfile: 'dist/preload.cjs', bundle: true, platform: 'node', format: 'cjs', external: ['electron'] }),
   build({ entryPoints: ['src/renderer/app.ts'], outfile: 'dist/app.js', bundle: true, platform: 'browser', target: 'es2022', sourcemap: true }),
   copyFile('src/renderer/index.html', 'dist/index.html'),
-  copyFile('assets/icon.svg', 'dist/icon.svg')
+  copyFile('assets/icon.svg', 'dist/icon.svg'),
+  copyFile('assets/pets/zhubo-sprites.png', 'dist/zhubo-sprites.png'),
+  copyFile('assets/trayTemplate.png', 'dist/trayTemplate.png'),
+  copyFile('assets/trayTemplate@2x.png', 'dist/trayTemplate@2x.png')
 ]);
 try { await copyFile('assets/icon.png', 'dist/icon.png'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 console.log('Built desktop application in dist/');

@@ -61,6 +61,16 @@ test('persists preferences and only successful deletion counts across reloads', 
   assert.deepEqual(reloaded.stats, { files: 3, bytes: 25, meals: 1 });
 });
 
+test('persists Zhubo selection across reloads without changing statistics', async (t) => {
+  const { store, path } = await fixture(t);
+  await store.recordResults([SUCCESS]);
+  const selected = await store.updatePreferences({ theme: 'pig' });
+  const reloaded = await new StateStore(path).load();
+  assert.equal(reloaded.preferences.theme, 'pig');
+  assert.deepEqual(reloaded, selected);
+  assert.deepEqual(reloaded.stats, { files: 3, bytes: 25, meals: 1 });
+});
+
 test('counts empty directories as successful meals but not as files', async (t) => {
   const { store } = await fixture(t);
   await store.recordResults([{ name: 'empty', status: 'success', fileCount: 0, bytes: 0 }]);

@@ -8,7 +8,7 @@ export interface WindowBounds {
   height: number;
 }
 
-const THEMES = new Set(['munch', 'pixel', 'blade', 'void', 'paper']);
+const THEMES = new Set(['munch', 'pixel', 'blade', 'void', 'paper', 'pig']);
 const PET_SETTINGS_WIDTH = 260;
 const PET_SETTINGS_HEIGHT = 180;
 const PET_SETTINGS_GAP = 12;

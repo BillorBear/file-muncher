@@ -20,6 +20,10 @@ test('IPC preferences accept only typed supported options', () => {
   }
 });
 
+test('IPC accepts Zhubo as a supported pet theme', () => {
+  assert.deepEqual(parsePreferencePatch({ theme: 'pig' }), { theme: 'pig' });
+});
+
 test('IPC pet sizes allow the supported range and reject malformed or unbounded values', () => {
   for (const petSize of [0.5, 0.7, 1]) {
     assert.deepEqual(parsePreferencePatch({ petSize }), { petSize });

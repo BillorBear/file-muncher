@@ -153,7 +153,7 @@ function createMainWindow(): BrowserWindow {
     minWidth: 940,
     minHeight: 700,
     title: APP_NAME,
-    backgroundColor: '#f7f4ee',
+    backgroundColor: '#ffffff',
     show: false,
     icon: iconPath(),
     autoHideMenuBar: true,
@@ -290,7 +290,7 @@ function openPetSettingsWindow(pet: BrowserWindow): void {
   const window = new BrowserWindow({
     ...bounds,
     title: `${APP_NAME} · 宠物大小`,
-    backgroundColor: '#fcfff7',
+    backgroundColor: '#ffffff',
     frame: false,
     resizable: false,
     maximizable: false,
@@ -370,15 +370,7 @@ function resumeRequestedQuit(): void {
 }
 
 function trayIcon(): NativeImage {
-  const rows = ['0000000000000000', '0000110000110000', '0000111111110000', '0011111111111100',
-    '0011001111001100', '0011001111001100', '0011111111111100', '0011111111111100',
-    '0011100000011100', '0011100000011100', '0011111111111100', '0001111111111000',
-    '0000110000110000', '0000110000110000', '0000000000000000', '0000000000000000'];
-  const bitmap = Buffer.alloc(16 * 16 * 4);
-  rows.forEach((row, y) => [...row].forEach((pixel, x) => {
-    if (pixel === '1') bitmap[(y * 16 + x) * 4 + 3] = 255;
-  }));
-  const icon = nativeImage.createFromBitmap(bitmap, { width: 16, height: 16 });
+  const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'dist', 'trayTemplate.png'));
   if (process.platform === 'darwin') icon.setTemplateImage(true);
   return icon;
 }

@@ -136,8 +136,10 @@ try {
   assert.deepEqual(await desktop.evaluate(({ BrowserWindow }) => Object.fromEntries(BrowserWindow.getAllWindows().filter(window => ['main', 'pet'].includes(new URL(window.webContents.getURL()).searchParams.get('view'))).map(window => [new URL(window.webContents.getURL()).searchParams.get('view'), window.isVisible()]))), { main: true, pet: true },
     'Closing settings must leave both main and pet windows visible.');
   console.log('PASS: compact pet, settings anchored to visible body, live resizing without overlap, settings file-operation denial, pet-only IPC authorization');
-  for (const theme of ['munch', 'pixel', 'blade', 'void', 'paper']) {
+  for (const theme of ['munch', 'pixel', 'blade', 'void', 'paper', 'pig']) {
+    await main.locator('#open-library').click();
     await main.locator(`[data-select-theme="${theme}"]`).click();
+    await expect(main.locator('#home-view')).toBeVisible();
     await expect(main.locator('body')).toHaveAttribute('data-theme', theme);
     await expect(pet.locator('body')).toHaveAttribute('data-theme', theme);
     await main.screenshot({ path: `test-results/main-${theme}.png` });
@@ -147,7 +149,9 @@ try {
     await expect(main.locator('#drop-zone')).toHaveAttribute('aria-busy', 'false', { timeout: 6000 });
   }
   assert.deepEqual((await main.evaluate(() => window.shredder.getState())).stats, { files: 0, bytes: 0, meals: 0 });
+  await main.locator('#open-library').click();
   await main.locator('[data-select-theme="munch"]').click();
+  await expect(main.locator('#home-view')).toBeVisible();
   await main.locator('#settings').click();
   await main.locator('#pref-motion').check();
   await expect(main.locator('#pref-size')).toHaveValue('50');
@@ -166,7 +170,7 @@ try {
   await expect(pet.locator('#speech')).toContainText('1 个文件');
   await pet.mouse.move(0, 0);
   await expect(pet.locator('#speech')).toBeHidden();
-  console.log('PASS: five themes, non-destructive previews, native File bridge, real system trash, shared statistics');
+  console.log('PASS: six themes, non-destructive previews, native File bridge, real system trash, shared statistics');
 
   await main.evaluate(() => window.shredder.updatePreferences({ deletionMode: 'permanent' }));
   const permanent = join(fixtures, 'permanent-test.txt');

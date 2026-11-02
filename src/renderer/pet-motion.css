@@ -8,8 +8,8 @@
 /* Motion stays below the parent that owns the user's size and growth scale. */
 .pet-scene[data-dragging="true"] .creature-scene {
   transform-origin: 50% 44%;
-  transform: translateY(-5px) rotate(calc(var(--pet-drag-sign) * -5deg));
-  transition: transform 130ms ease-out;
+  transform: translateY(-3px) rotate(calc(var(--pet-drag-sign) * -3deg));
+  transition: transform 100ms ease-out;
 }
 
 .pet-scene[data-dragging="true"] .scene-shadow {
@@ -18,6 +18,7 @@
   transform: scaleX(.72);
 }
 
+.pet-scene[data-dragging="true"] .pig-character,
 .pet-scene[data-dragging="true"] .munch-character,
 .pet-scene[data-dragging="true"] .pixel-character,
 .pet-scene[data-dragging="true"] .tank-character,
@@ -138,8 +139,8 @@
 
 @keyframes pet-soft-landing {
   0% { transform: translateY(-5px) scale(1, 1.03); }
-  35% { transform: translateY(3px) scale(1.07, .92); }
-  70% { transform: translateY(-2px) scale(.98, 1.02); }
+  35% { transform: translateY(2px) scale(1.04, .96); }
+  70% { transform: translateY(-1px) scale(.99, 1.01); }
   100% { transform: none; }
 }
 
@@ -187,4 +188,14 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Reduced motion keeps tracking functional, without decorative body sway. */
+:is(.reduce-motion, [data-reduce-motion="true"]) .pet-scene[data-dragging="true"] :is(.creature-scene, .pig-character, .munch-character, .pixel-character, .tank-character, .void-system, .paper-machine, .munch-arm, .paper-strip),
+:is(.reduce-motion, [data-reduce-motion="true"]) [data-phase="hover"] .creature-scene :is(.pig-character, .munch-character, .pixel-character, .void-system) {
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pet-scene[data-dragging="true"] :is(.creature-scene, .pig-character, .munch-character, .pixel-character, .tank-character, .void-system, .paper-machine, .munch-arm, .paper-strip),
+  [data-phase="hover"] .creature-scene :is(.pig-character, .munch-character, .pixel-character, .void-system) { transform: none; }
 }

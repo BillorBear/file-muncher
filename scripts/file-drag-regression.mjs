@@ -6,7 +6,7 @@ import { chromium, expect } from '@playwright/test';
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const appUrl = pathToFileURL(resolve('dist/index.html')).href;
 const failures = [];
-const themes = ['munch', 'pixel', 'blade', 'void', 'paper'];
+const themes = ['munch', 'pixel', 'blade', 'void', 'paper', 'pig'];
 
 async function newPage(view) {
   const page = await browser.newPage({ viewport: view === 'pet' ? { width: 500, height: 500 } : { width: 1200, height: 900 } });

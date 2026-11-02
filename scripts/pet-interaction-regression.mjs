@@ -109,7 +109,7 @@ async function newPetPage(view = 'pet') {
     };
   });
   await page.goto(`${appUrl}?view=${view}`);
-  if (view !== 'pet-settings') await page.locator('#creature svg').waitFor();
+  if (view !== 'pet-settings') await page.locator('#creature > .creature-scene > svg').waitFor();
   await page.mouse.move(490, 490);
   return page;
 }
@@ -451,14 +451,14 @@ try {
     assert.equal(await page.evaluate(() => window.petTest.snapshot().state.stats.files), 0);
   });
 
-  await run('all five pet styles support click reactions without file operations', async page => {
-    for (const theme of ['munch', 'pixel', 'blade', 'void', 'paper']) {
+  await run('all six pet styles support click reactions without file operations', async page => {
+    for (const theme of ['munch', 'pixel', 'blade', 'void', 'paper', 'pig']) {
       await page.evaluate(theme => window.petTest.setPreferences({ theme }), theme);
       await page.locator('#creature').click();
       assert.equal(await page.locator('body').getAttribute('data-theme'), theme);
       assert.equal(await page.locator('#drop-zone').getAttribute('data-interacting'), 'true',
         `${theme} should support pet interaction.`);
-      assert.equal(await page.locator('#creature svg').count(), 1, `${theme} should render its own pet scene.`);
+      assert.equal(await page.locator('#creature > .creature-scene > svg').count(), 1, `${theme} should render its own pet scene.`);
       await page.clock.runFor(2000);
     }
     const { calls, state } = await page.evaluate(() => window.petTest.snapshot());

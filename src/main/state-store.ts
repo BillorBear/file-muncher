@@ -6,7 +6,7 @@ import { isPetSize, PET_SIZE_DEFAULT } from '../shared/pet-layout';
 
 const SCHEMA_VERSION = 1;
 const MAX_STATE_BYTES = 16_384;
-const THEMES: readonly ThemeId[] = ['munch', 'pixel', 'blade', 'void', 'paper'];
+const THEMES: readonly ThemeId[] = ['munch', 'pixel', 'blade', 'void', 'paper', 'pig'];
 const PREFERENCE_KEYS: readonly (keyof Preferences)[] = ['theme', 'deletionMode', 'petVisible', 'reduceMotion', 'petSize'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

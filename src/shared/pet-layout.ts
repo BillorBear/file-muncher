@@ -29,6 +29,7 @@ const BODY_BOUNDS: Readonly<Record<ThemeId, PetBodyBounds>> = {
   blade: { x: 98, y: 111, width: 224, height: 178 },
   void: { x: 85, y: 101, width: 250, height: 147 },
   paper: { x: 120, y: 128, width: 211, height: 154 },
+  pig: { x: 98, y: 70, width: 224, height: 224 },
 };
 
 export function getPetBodyBounds(windowWidth: number, theme: ThemeId, growthScale: number): PetBodyBounds {

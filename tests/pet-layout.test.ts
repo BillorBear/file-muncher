@@ -17,7 +17,7 @@ test('window sizing bounds out of range values and falls back safely for non-fin
 });
 
 test('all pet body outlines and three-line speech fit at supported sizes and maximum growth', () => {
-  const themes: readonly ThemeId[] = ['munch', 'pixel', 'blade', 'void', 'paper'];
+  const themes: readonly ThemeId[] = ['munch', 'pixel', 'blade', 'void', 'paper', 'pig'];
   for (const theme of themes) {
     for (const size of [PET_SIZE_MIN, PET_SIZE_DEFAULT, PET_SIZE_MAX]) {
       for (const growth of [1, 1.3]) {

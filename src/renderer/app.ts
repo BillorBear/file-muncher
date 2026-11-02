@@ -3,6 +3,7 @@ import './themes.css';
 import './pet.css';
 import './pet-motion.css';
 import { bindPetGestures } from './pet-interactions';
+import { bindPetLibrary, petLibraryMarkup, type PetLibraryControls } from './pet-library';
 import { bindFileTracking, type FileTracking } from './file-tracking';
 import { getPetBodyBounds, PET_SIZE_DEFAULT, PET_SIZE_MIN, PET_SIZE_MAX } from '../shared/pet-layout';
 import { THEMES, sceneMarkup } from './themes';
@@ -25,6 +26,10 @@ let speechTimer: ReturnType<typeof setTimeout> | undefined;
 let interactionTimer: ReturnType<typeof setTimeout> | undefined;
 let fileTracking: FileTracking | undefined;
 let dragHovered = false;
+let savingSettings = false;
+let closingSettings = false;
+let currentPage: 'home' | 'library' = 'home';
+let petLibrary: PetLibraryControls | undefined;
 const MEAL_SPEECH_DURATION = 2000;
 const INTERACTION_DURATION = 900;
 
@@ -41,7 +46,7 @@ const icons = {
   trash: '<path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',
   dots: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'
 };
-function icon(name: keyof typeof icons): string { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`; }
+function icon(name: keyof typeof icons): string { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`; }
 function element<T extends HTMLElement = HTMLElement>(selector: string): T { const found = document.querySelector<T>(selector); if (!found) throw new Error(`Missing UI element: ${selector}`); return found; }
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -73,36 +78,36 @@ const api = window.shredder ?? previewApi();
 
 function mainMarkup(): string {
   return `<div class="app-shell">
-    <header class="app-header"><div class="brand"><img src="./icon.svg" alt=""/><div><b>file muncher</b><span>文件阿呜</span></div></div>
-      <div class="header-actions"><span class="offline-tag"><i></i>离线小伙伴</span><button class="quiet-button" id="toggle-pet">${icon('pet')}<span>桌面宠物</span><i class="switch-indicator"></i></button><button class="icon-button" id="settings" aria-label="打开设置">${icon('settings')}</button></div>
+    <header class="app-header">
+      <div class="brand"><img src="./icon.svg" alt=""/><div><b>文件阿呜</b><span>file muncher</span></div></div>
+      <nav class="page-nav" aria-label="页面"><button id="nav-home" aria-current="page">首页</button><button id="open-library">宠物馆</button></nav>
+      <div class="header-actions"><span class="offline-tag"><i></i>本地运行</span><button class="quiet-button" id="toggle-pet" aria-label="显示或隐藏桌面宠物">${icon('pet')}<span>桌面陪伴</span><i class="switch-indicator"></i></button><button class="icon-button" id="settings" aria-label="打开设置" aria-haspopup="dialog" title="偏好设置">${icon('settings')}</button></div>
     </header>
-    <div class="workspace">
-      <aside class="collection"><div class="eyebrow">THE LITTLE COLLECTION</div><div class="collection-title"><h1>选一只，开饭。</h1><span>05</span></div><p class="collection-intro">多余的文件，也能有个有趣的结局。</p>
-        <nav class="theme-list" aria-label="选择粉碎机造型">${THEMES.map(theme => `<button class="theme-option" data-select-theme="${theme.id}" aria-pressed="false"><div class="theme-thumb mini-scene" data-phase="idle">${sceneMarkup(theme.id)}</div><span class="theme-copy"><strong>${theme.name}</strong><small>${theme.tagline}</small></span><span class="theme-index">${theme.number}</span></button>`).join('')}</nav>
-        <div class="keepers-note"><span class="note-star">✳</span><b>关掉窗口，快乐继续</b><p>小家伙会留在桌面上。<br>把文件拖给它，随时开饭。</p><button class="text-button" id="show-pet">去桌面找它 ${icon('arrow')}</button></div>
-      </aside>
-      <main class="main-content">
-        <div class="stage-heading"><div><div class="eyebrow">A LITTLE LESS CLUTTER, A LITTLE MORE JOY.</div><h2 id="theme-title"></h2></div><button class="mode-badge" id="mode-badge">${icon('shield')}<span></span></button></div>
+    <main class="workspace">
+      <section id="home-view" class="main-content" aria-labelledby="home-title">
+        <div class="page-heading"><div><h1 id="home-title" tabindex="-1">文件整理</h1><p>不需要的文件，拖进来就好。</p></div><button class="mode-badge" id="mode-badge" aria-haspopup="dialog" title="更改文件处理方式">${icon('shield')}<span></span></button></div>
         <section class="stage" id="drop-zone" aria-label="将文件或文件夹拖到这里喂给宠物" data-phase="idle" tabindex="0">
-          <div class="stage-corner"><span id="style-label"></span><span class="stage-edition">ORIGINAL SERIES / <span id="edition"></span></span></div>
-          <div class="stage-decoration star-one">✳</div><div class="stage-decoration star-two">✧</div><div class="stage-decoration orbit-mark">+</div>
+          <div class="stage-corner"><div class="stage-identity"><span id="edition" hidden></span><h2 id="theme-title"></h2><span id="style-label"></span><button id="change-pet" class="change-pet">更换伙伴 ${icon('arrow')}</button></div><span class="stage-status" id="stage-status" role="status"><i></i><span>等你投喂</span></span></div>
           <div class="speech-bubble" id="speech">今天有什么好吃的？</div>
           <div class="hero-creature" id="creature" role="button" tabindex="0" aria-label="点击与宠物互动"></div>
-          <div class="drop-caption"><h3 id="drop-title">拖进来，喂给我。</h3><p id="drop-subtitle">文件或文件夹都可以，我不挑食。</p></div>
-          <div class="drop-overlay" aria-hidden="true"></div><div class="stage-floor"></div>
+          <div class="drop-caption"><h3 id="drop-title">把文件拖到这里</h3><p id="drop-subtitle">文件和文件夹都可以</p></div>
+          <div class="drop-overlay" aria-hidden="true"><span>松手，交给我。</span></div>
         </section>
-        <div class="feeding-actions"><div class="choose-actions"><button class="primary-button" id="choose-files">${icon('plus')}选文件喂它</button><button class="folder-button" id="choose-folder" title="选择文件夹" aria-label="选择文件夹">${icon('folder')}</button></div><button class="preview-button" id="preview">${icon('play')}试播动画<span>不删除文件</span></button></div>
-        <section class="pet-stats" aria-label="宠物成长统计"><div class="stat"><span>累计吃掉</span><strong><span data-stat="files">0</span><small>个文件</small></strong></div><div class="stat"><span>吞下的数据</span><strong data-stat="bytes">0 B</strong></div><div class="stat weight-stat"><span>现在的体重 <i title="虚拟体重；根据成功处理的文件数和大小成长">↗</i></span><strong><span data-stat="weight">1.2</span><small>kg</small></strong></div><div class="growth-stat"><span class="growth-level" data-stat="level"></span><span class="growth-label" data-stat="growth"></span><div class="growth-track"><i id="growth-progress"></i></div><small>慢慢长大，最多长到 1.3 倍</small></div></section>
-        <div class="result-panel" id="result-panel" aria-live="polite"><span class="result-icon">${icon('shield')}</span><div><strong id="result-title">只处理你主动拖入或选择的文件。</strong><p id="result-detail">当前删除方式显示在右上角。成长记录会保存在这台电脑上。</p><ul id="result-items"></ul></div></div>
-      </main>
-    </div><footer class="app-footer"><span>一点清爽，一点快乐。</span><span id="environment-label">本地处理 · 不上传文件</span><span>v1.0.2</span></footer>
+        <div class="feeding-actions"><div class="choose-actions"><button class="primary-button" id="choose-files">${icon('plus')}选择文件</button><button class="folder-button" id="choose-folder">${icon('folder')}选择文件夹</button></div><button class="preview-button" id="preview">${icon('play')}<span class="preview-label">试播动画<small>不操作文件</small></span></button></div>
+        <section class="pet-stats" aria-label="宠物成长统计"><div class="stat"><span>累计整理</span><strong><span data-stat="files">0</span><small>个文件</small></strong></div><div class="stat"><span>累计处理大小</span><strong data-stat="bytes">0 B</strong></div><div class="stat weight-stat"><span>伙伴体重 <small>虚拟</small></span><strong><span data-stat="weight">1.2</span><small>kg</small></strong></div><div class="growth-stat"><div><span class="growth-level" data-stat="level"></span><span class="growth-label" data-stat="growth"></span></div><div class="growth-track"><i id="growth-progress"></i></div><small>投喂后会慢慢长大</small></div></section>
+        <div class="result-panel" id="result-panel" aria-live="polite"><span class="result-icon">${icon('shield')}</span><div><strong id="result-title">只处理你主动交给它的文件。</strong><p id="result-detail">处理方式以上方标签为准。只在本机处理，文件内容不会上传。</p><ul id="result-items"></ul></div></div>
+      </section>
+      ${petLibraryMarkup()}
+    </main><footer class="app-footer"><span>文件阿呜</span><span id="environment-label">离线处理 · 无需账号</span><span>1.0.2 / 本地体验版</span></footer>
   </div>
-  <dialog id="settings-dialog"><form id="settings-form"><div class="dialog-heading"><div><span class="eyebrow">MAKE YOURSELF AT HOME</span><h2>小家伙的日常</h2></div><button type="button" class="icon-button" id="close-settings" aria-label="关闭设置">${icon('close')}</button></div>
-    <fieldset><legend>喂食之后，文件去哪里？</legend><label class="radio-option"><input type="radio" name="mode" value="trash"><span><b>系统回收站</b><small>默认方式，可从系统回收站恢复。</small></span><span class="recommended">推荐</span></label><label class="radio-option"><input type="radio" name="mode" value="permanent"><span><b>永久删除</b><small>跳过回收站。每一批都会再次确认，无法在软件中撤销。</small></span></label></fieldset>
-    <label class="setting-toggle"><span><b>桌面悬浮宠物</b><small>主窗口关闭后，仍可拖文件喂食。</small></span><input id="pref-pet" type="checkbox"></label>
-    <label class="setting-size" for="pref-size"><span><b>悬浮宠物大小</b><output id="pref-size-label">70%</output></span><input id="pref-size" type="range" min="50" max="100" step="5" value="70"><small>拖动滑块即时生效，桌面宠物同步缩放。</small></label>
-    <label class="setting-toggle"><span><b>减少动态效果</b><small>使用简短反馈；也会尊重系统的减少动态设置。</small></span><input id="pref-motion" type="checkbox"></label>
-    <p class="settings-note">统计的是成功处理的文件数和逻辑大小，文件夹内的文件会一并计入。体重是趣味数值；普通删除不等于磁盘安全擦除。</p><p class="settings-error" id="settings-error" role="alert"></p><button type="submit" class="primary-button save-settings">保存设置 ${icon('check')}</button>
+  <dialog id="settings-dialog" aria-labelledby="settings-title" aria-describedby="settings-description"><form id="settings-form">
+    <div class="dialog-heading"><div><h2 id="settings-title">偏好设置</h2><p id="settings-description">文件处理方式和桌面宠物</p></div><button type="button" class="icon-button" id="close-settings" aria-label="关闭设置" autofocus>${icon('close')}</button></div>
+    <div class="settings-body"><fieldset><legend>文件处理</legend><p class="setting-description">喂给小伙伴之后，文件去哪里？</p><label class="radio-option"><input type="radio" name="mode" value="trash"><span><b>移入系统回收站</b><small>需要时，可从系统回收站恢复。</small></span><span class="recommended">推荐</span></label><label class="radio-option permanent-option"><input type="radio" name="mode" value="permanent"><span><b>永久删除</b><small>每一批都会再次确认，无法在软件中撤销。</small></span></label><p class="permanent-note">永久删除不等于安全擦除，也不保证数据无法恢复。</p></fieldset>
+    <section class="settings-section" aria-labelledby="companion-settings"><h3 id="companion-settings">桌面陪伴</h3><label class="setting-toggle"><span><b>显示桌面宠物</b><small>关闭主窗口后，也能继续投喂。</small></span><input id="pref-pet" type="checkbox" role="switch"></label>
+    <label class="setting-size" for="pref-size"><span><b>宠物大小</b><output id="pref-size-label">70%</output></span><input id="pref-size" type="range" min="50" max="100" step="5" value="70"><span class="size-endpoints"><small>小巧 · 50%</small><small>舒展 · 100%</small></span><small>大小即时保存，桌面宠物同步缩放。</small></label></section>
+    <section class="settings-section" aria-labelledby="motion-settings"><h3 id="motion-settings">动态效果</h3><label class="setting-toggle"><span><b>减少动态效果</b><small>保留状态反馈，也会遵循系统偏好。</small></span><input id="pref-motion" type="checkbox" role="switch"></label></section>
+    <p class="settings-note">${icon('shield')}<span>文件在本机处理。仅成功处理的文件计入成长；体重是陪伴用的趣味数值。</span></p></div>
+    <div class="settings-footer"><p class="settings-error" id="settings-error" role="alert"></p><button type="submit" class="primary-button save-settings">保存偏好 ${icon('check')}</button><p>按 <kbd>esc</kbd> 或点击外部关闭 · 未保存的选项不生效</p></div>
   </form></dialog>`;
 }
 
@@ -115,7 +120,7 @@ function petMarkup(): string {
 }
 
 function petSettingsMarkup(): string {
-  return `<main class="pet-settings-panel"><header><div><b>小一点，也可爱。</b><span>文件阿呜 · 桌面大小</span></div><button class="icon-button" id="close-pet-settings" aria-label="关闭大小设置">${icon('close')}</button></header>
+  return `<main class="pet-settings-panel"><header><div><b>桌面宠物</b><span>调整到顺手的大小</span></div><button class="icon-button" id="close-pet-settings" aria-label="关闭大小设置">${icon('close')}</button></header>
     <label for="pet-size">宠物大小 <output id="pet-size-label">70%</output></label><input id="pet-size" type="range" min="${PET_SIZE_MIN * 100}" max="${PET_SIZE_MAX * 100}" step="5" value="${PET_SIZE_DEFAULT * 100}">
     <p class="size-hint">拖动滑块，看旁边的小家伙实时变大变小。</p><p id="size-error" role="alert"></p>
     <footer><button id="pet-main">打开主窗口</button><button id="pet-hide">隐藏宠物</button><button id="pet-quit">退出</button></footer></main>`;
@@ -175,7 +180,7 @@ function stopInteraction(): void {
   delete element('#drop-zone').dataset.interacting;
 }
 function interact(): void {
-  if (busy) return;
+  if (busy || !canUseHome()) return;
   stopInteraction();
   const zone = element('#drop-zone');
   void zone.offsetWidth;
@@ -186,6 +191,10 @@ function interact(): void {
 function setPhase(phase: AnimationPhase): void {
   if (phaseTimer) clearTimeout(phaseTimer);
   element('#drop-zone').dataset.phase = phase;
+  if (!isPet && !isPetSettings) {
+    const labels: Record<AnimationPhase, string> = { idle: '等你投喂', hover: '准备开饭', processing: '正在处理', success: '处理完成', error: '请查看提示' };
+    element('#stage-status span').textContent = labels[phase];
+  }
   if (phase === 'success' || phase === 'error') phaseTimer = setTimeout(() => setPhase('idle'), 2800);
 }
 function setBusy(value: boolean): void {
@@ -193,7 +202,7 @@ function setBusy(value: boolean): void {
   busy = value;
   if (!value) fileTracking?.reset();
   document.body.classList.toggle('is-busy', value);
-  document.querySelectorAll<HTMLButtonElement>('[data-select-theme], #choose-files, #choose-folder, #preview, #settings, #mode-badge').forEach(button => { button.disabled = value; });
+  document.querySelectorAll<HTMLButtonElement>('#nav-home, #open-library, #change-pet, #choose-files, #choose-folder, #preview, #settings, #mode-badge').forEach(button => { button.disabled = value; });
   element('#drop-zone').setAttribute('aria-busy', String(value));
   if (!value) updateState(state);
   renderPetSpeech();
@@ -229,7 +238,7 @@ function updateState(next: AppState): void {
     element('[data-stat="level"]').textContent = `Lv.${growth.level}`;
     element('[data-stat="growth"]').textContent = growth.label;
     element('#growth-progress').style.width = `${Math.max(4, growth.progress * 100)}%`;
-    document.querySelectorAll<HTMLButtonElement>('[data-select-theme]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.selectTheme === theme.id)));
+    petLibrary?.sync();
   }
 }
 
@@ -246,12 +255,23 @@ function showMessage(title: string, detail = '', items: BatchItemResult[] = []):
     list.append(li);
   });
   element('#result-panel').classList.toggle('has-error', items.some(item => item.status === 'error'));
+  if (!isPet && currentPage === 'home') element('#result-panel').scrollIntoView({ block: 'nearest' });
 }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : '操作未完成，请重试。'; }
 async function withFeedback(action: () => Promise<void>): Promise<void> {
-  try { await action(); } catch (error) { if (!isPetSettings) setPhase('error'); showMessage('这次没吃下去', errorMessage(error)); say('出了点小状况'); }
+  if (!isPet && !isPetSettings && currentPage === 'library') element('#library-error').textContent = '';
+  try { await action(); } catch (error) {
+    if (!isPet && !isPetSettings && currentPage === 'library') {
+      element('#library-error').textContent = errorMessage(error);
+      return;
+    }
+    if (!isPetSettings) setPhase('error');
+    showMessage('这次没吃下去', errorMessage(error));
+    say('出了点小状况');
+  }
 }
 async function feed(prepare: () => Promise<PreparedBatch | null>): Promise<void> {
+  if (!canUseHome()) return;
   if (busy) { showMessage('还在咀嚼这一口', '等这一批处理完成，再把文件拖进来。'); return; }
   setBusy(true);
   hideMealSpeech();
@@ -266,6 +286,7 @@ async function feed(prepare: () => Promise<PreparedBatch | null>): Promise<void>
     const isTank = lastTheme === 'blade';
     if (!isTank) setPhase('processing');
     say(batch.mode === 'permanent' ? '请确认这份永久删除大餐' : isTank ? '目标锁定，正在处理…' : '啊呜，开动啦！');
+    if (!isPet) element('#stage-status span').textContent = batch.mode === 'permanent' ? '等待确认' : '正在处理';
     let started = performance.now();
     const result = await api.executeBatch(batch.token);
     if (result.cancelled) { setPhase('idle'); showMessage('已取消，文件还在原处。'); say('留着下次再吃'); return; }
@@ -297,7 +318,7 @@ function bindDrop(): void {
   fileTracking = bindFileTracking({
     zone,
     creature: element('#creature'),
-    isBusy: () => busy,
+    isBusy: () => busy || !canUseHome(),
     onHoverChange: hovered => {
       dragHovered = hovered;
       if (!busy) {
@@ -313,7 +334,29 @@ function bindDrop(): void {
   zone.addEventListener('keydown', event => { if ((event.key === 'Enter' || event.key === ' ') && event.target === zone && !isPet) { event.preventDefault(); void feed(() => api.choose('files')); } });
 }
 
+function canUseHome(): boolean {
+  return isPet || (currentPage === 'home' && !element<HTMLDialogElement>('#settings-dialog').open);
+}
+function showPage(page: 'home' | 'library'): void {
+  if (busy || element<HTMLDialogElement>('#settings-dialog').open) return;
+  fileTracking?.reset();
+  stopInteraction();
+  currentPage = page;
+  element('#home-view').hidden = page !== 'home';
+  element('#library-view').hidden = page !== 'library';
+  for (const [id, target] of [['#nav-home', 'home'], ['#open-library', 'library']] as const) {
+    const button = element(id);
+    if (page === target) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  }
+  if (page === 'library') { petLibrary?.sync(); petLibrary?.focusSearch(); }
+  else element('#home-title').focus({ preventScroll: true });
+}
+
 function openSettings(): void {
+  if (busy) return;
+  fileTracking?.reset();
+  stopInteraction();
   const dialog = element<HTMLDialogElement>('#settings-dialog');
   element<HTMLInputElement>(`input[name="mode"][value="${state.preferences.deletionMode}"]`).checked = true;
   element<HTMLInputElement>('#pref-pet').checked = state.preferences.petVisible;
@@ -321,7 +364,19 @@ function openSettings(): void {
   element<HTMLInputElement>('#pref-size').value = String(Math.round(state.preferences.petSize * 100));
   element('#pref-size-label').textContent = `${Math.round(state.preferences.petSize * 100)}%`;
   element('#settings-error').textContent = '';
-  dialog.showModal();
+  if (!dialog.open) dialog.showModal();
+}
+async function closeSettings(): Promise<void> {
+  if (savingSettings || closingSettings) return;
+  closingSettings = true;
+  const controls = document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#settings-form input, #settings-form button');
+  controls.forEach(control => { control.disabled = true; });
+  try {
+    if (await flushSizeWrites()) element<HTMLDialogElement>('#settings-dialog').close();
+  } finally {
+    closingSettings = false;
+    controls.forEach(control => { control.disabled = false; });
+  }
 }
 function bindMain(): void {
   const creature = element('#creature');
@@ -329,34 +384,70 @@ function bindMain(): void {
   creature.addEventListener('keydown', event => {
     if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) { event.preventDefault(); interact(); }
   });
-  document.querySelectorAll<HTMLButtonElement>('[data-select-theme]').forEach(button => button.addEventListener('click', () => { void withFeedback(async () => {
-    updateState(await api.updatePreferences({ theme: button.dataset.selectTheme as ThemeId }));
-    if (!busy) { setPhase('idle'); say('换个口味，继续快乐'); }
-  }); }));
+  petLibrary = bindPetLibrary({
+    currentTheme: () => state.preferences.theme,
+    selectTheme: async id => {
+      if (busy) throw new Error('请等当前操作完成后，再切换伙伴。');
+      setBusy(true);
+      try {
+        updateState(await api.updatePreferences({ theme: id }));
+        setPhase('idle');
+        say('换个口味，继续快乐');
+      } finally { setBusy(false); }
+    },
+    goHome: () => showPage('home'),
+  });
+  element('#nav-home').addEventListener('click', () => showPage('home'));
+  element('#open-library').addEventListener('click', () => showPage('library'));
+  element('#change-pet').addEventListener('click', () => showPage('library'));
   element('#choose-files').addEventListener('click', () => { void feed(() => api.choose('files')); });
   element('#choose-folder').addEventListener('click', () => { void feed(() => api.choose('directory')); });
   element('#preview').addEventListener('click', () => {
-    if (busy) return;
+    if (busy || !canUseHome()) return;
     setBusy(true); setPhase('processing'); say('表演时间！这次只吃空气');
     showMessage('正在试播动画', '没有操作真实文件，成长统计也不会改变。');
-    setTimeout(() => { setPhase('success'); say('好啦，轮到你的文件了'); setBusy(false); }, state.preferences.reduceMotion ? 500 : 2300);
+    setTimeout(() => {
+      setPhase('success'); element('#stage-status span').textContent = '试播完成'; say('好啦，轮到你的文件了'); setBusy(false);
+      showMessage('试播完成，没有操作文件。', '喜欢这个小伙伴的话，选择文件或拖进舞台即可投喂。');
+    }, state.preferences.reduceMotion || matchMedia('(prefers-reduced-motion: reduce)').matches ? 500 : 2300);
   });
   bindSizeControl();
   element('#settings').addEventListener('click', openSettings);
   element('#mode-badge').addEventListener('click', openSettings);
-  element('#close-settings').addEventListener('click', () => element<HTMLDialogElement>('#settings-dialog').close());
+  const settingsDialog = element<HTMLDialogElement>('#settings-dialog');
+  settingsDialog.addEventListener('close', () => fileTracking?.reset());
+  element('#close-settings').addEventListener('click', () => { void closeSettings(); });
+  settingsDialog.addEventListener('cancel', event => { event.preventDefault(); void closeSettings(); });
+  let backdropPress = false;
+  const outsideDrawer = (event: MouseEvent): boolean => {
+    const bounds = settingsDialog.getBoundingClientRect();
+    return event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+  };
+  settingsDialog.addEventListener('pointerdown', event => { backdropPress = outsideDrawer(event); });
+  settingsDialog.addEventListener('click', event => {
+    if (backdropPress && outsideDrawer(event)) void closeSettings();
+    backdropPress = false;
+  });
   element('#toggle-pet').addEventListener('click', () => { void withFeedback(async () => updateState(await api.updatePreferences({ petVisible: !state.preferences.petVisible }))); });
-  element('#show-pet').addEventListener('click', () => { void withFeedback(async () => { updateState(await api.updatePreferences({ petVisible: true })); showMessage('小家伙已经在桌面等你了。', '按住宠物身体拖动位置，轻点与它互动；右键宠物可调整大小，悬停会告诉你它的胃口。'); }); });
   element<HTMLFormElement>('#settings-form').addEventListener('submit', event => {
     event.preventDefault();
+    if (savingSettings || closingSettings) return;
+    savingSettings = true;
     const submit = element<HTMLButtonElement>('.save-settings'); submit.disabled = true;
+    submit.textContent = '正在保存…';
+    const controls = document.querySelectorAll<HTMLInputElement>('#settings-form input');
+    controls.forEach(control => { control.disabled = true; });
     const mode = element<HTMLInputElement>('input[name="mode"]:checked').value === 'permanent' ? 'permanent' : 'trash';
     void (async () => {
       if (!(await flushSizeWrites())) return;
       updateState(await api.updatePreferences({ deletionMode: mode, petVisible: element<HTMLInputElement>('#pref-pet').checked, reduceMotion: element<HTMLInputElement>('#pref-motion').checked }));
       element<HTMLDialogElement>('#settings-dialog').close();
       showMessage(mode === 'trash' ? '已设为移入系统回收站。' : '已设为永久删除，每一批都会再次确认。', mode === 'trash' ? '删除后可从系统回收站恢复。' : '请确认文件不再需要；这不会保证磁盘内容无法恢复。');
-    })().catch((error: unknown) => { element('#settings-error').textContent = errorMessage(error); }).finally(() => { submit.disabled = false; });
+    })().catch((error: unknown) => { element('#settings-error').textContent = errorMessage(error); }).finally(() => {
+      savingSettings = false; submit.disabled = false;
+      submit.innerHTML = `保存偏好 ${icon('check')}`;
+      controls.forEach(control => { control.disabled = false; });
+    });
   });
 }
 

@@ -29,5 +29,11 @@ try {
     }
     execFileSync('iconutil', ['-c', 'icns', iconset, '-o', resolve('assets/icon.icns')]);
   }
+  const traySvg = await readFile('assets/trayTemplate.svg', 'utf8');
+  await page.setContent(`<style>body{margin:0;background:transparent}svg{width:100vw;height:100vh;display:block}</style>${traySvg}`);
+  for (const [size, name] of [[16, 'trayTemplate.png'], [32, 'trayTemplate@2x.png']]) {
+    await page.setViewportSize({ width: size, height: size });
+    await page.screenshot({ path: join('assets', name), omitBackground: true });
+  }
   console.log('Generated application icons.');
 } finally { await browser.close(); await rm(temporary, { recursive: true, force: true }); }

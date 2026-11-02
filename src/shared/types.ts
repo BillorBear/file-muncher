@@ -1,4 +1,4 @@
-export type ThemeId = 'munch' | 'pixel' | 'blade' | 'void' | 'paper';
+export type ThemeId = 'munch' | 'pixel' | 'blade' | 'void' | 'paper' | 'pig';
 export type DeletionMode = 'trash' | 'permanent';
 export type AnimationPhase = 'idle' | 'hover' | 'processing' | 'success' | 'error';
 

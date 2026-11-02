@@ -18,6 +18,7 @@ const bodySelectors = {
   blade: '.tank-character',
   void: '.void-system',
   paper: '.paper-machine',
+  pig: '.pig-character',
 };
 const records = [];
 const failures = [];
@@ -48,7 +49,7 @@ async function createPetPage(viewport, theme, grown) {
     };
   }, { theme, grown, size: viewport.width / 300 });
   await page.goto(`${appUrl}?view=pet`);
-  await page.locator('#creature svg').waitFor();
+  await page.locator('#creature > .creature-scene > svg').waitFor();
   await page.mouse.move(viewport.width / 2, viewport.height - 40);
   await expect(page.locator('#speech')).toBeVisible();
   return page;
@@ -65,13 +66,24 @@ try {
             const speech = document.querySelector('#speech').getBoundingClientRect();
             const body = { x: Infinity, y: Infinity, right: -Infinity, bottom: -Infinity };
             for (const shape of document.querySelector(selector).querySelectorAll('*')) {
-              if (!(shape instanceof SVGGeometryElement)) continue;
               let visible = true;
               for (let ancestor = shape; ancestor instanceof SVGElement; ancestor = ancestor.parentElement) {
                 const style = getComputedStyle(ancestor);
                 if (Number(style.opacity) === 0 || style.display === 'none' || style.visibility === 'hidden') visible = false;
               }
               if (!visible) continue;
+              if (shape instanceof SVGSVGElement && shape.matches('.pig-portrait')) {
+                const viewport = shape.viewBox.baseVal;
+                for (const [x, y] of [[viewport.x, viewport.y], [viewport.x + viewport.width, viewport.y],
+                  [viewport.x, viewport.y + viewport.height], [viewport.x + viewport.width, viewport.y + viewport.height]]) {
+                  const point = new DOMPoint(x, y).matrixTransform(shape.getScreenCTM());
+                  body.x = Math.min(body.x, point.x);
+                  body.y = Math.min(body.y, point.y);
+                  body.right = Math.max(body.right, point.x);
+                  body.bottom = Math.max(body.bottom, point.y);
+                }
+              }
+              if (!(shape instanceof SVGGeometryElement)) continue;
               const matrix = shape.getScreenCTM();
               const length = shape.getTotalLength();
               const style = getComputedStyle(shape);

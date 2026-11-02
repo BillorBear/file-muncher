@@ -20,4 +20,4 @@ The animation phases are visual feedback only. The desktop deletion result deter
 - [codex-pets-web / Interactions](https://github.com/FroeMic/codex-pets-web#interactions)：公开说明水平拖动切换 running-left/right，释放时触发短动作；本项目据此设计原创方向动作与 350ms 落地反馈。
 - [codex-pet-share](https://github.com/portons/codex-pet-share)：其代码仓库为 MIT，说明基础动作与方向动画布局。社区角色素材的版权不由代码许可覆盖。
 
-仅参考交互与动画状态组织方式，没有复制上述网站的角色、精灵图、代码或其他素材。五款 SVG 与拖动动画继续由本项目自行实现。
+仅参考交互与动画状态组织方式，没有复制上述网站的角色、精灵图、代码或其他素材。五款 SVG 与拖动动画由本项目自行实现；猪波使用用户提供的小猪参考图，通过内置 imagegen 生成透明毛绒角色表情图集（`assets/pets/zhubo-sprites.png`）。
