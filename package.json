@@ -1,7 +1,7 @@
 {
   "name": "file-muncher",
   "productName": "file muncher",
-  "version": "1.0.2",
+  "version": "1.0.0",
   "description": "A playful offline file shredder and desktop pet",
   "private": true,
   "type": "module",

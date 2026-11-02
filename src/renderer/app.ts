@@ -98,7 +98,7 @@ function mainMarkup(): string {
         <div class="result-panel" id="result-panel" aria-live="polite"><span class="result-icon">${icon('shield')}</span><div><strong id="result-title">只处理你主动交给它的文件。</strong><p id="result-detail">处理方式以上方标签为准。只在本机处理，文件内容不会上传。</p><ul id="result-items"></ul></div></div>
       </section>
       ${petLibraryMarkup()}
-    </main><footer class="app-footer"><span>文件阿呜</span><span id="environment-label">离线处理 · 无需账号</span><span>1.0.2 / 本地体验版</span></footer>
+    </main><footer class="app-footer"><span>文件阿呜</span><span id="environment-label">离线处理 · 无需账号</span><span>1.0.0</span></footer>
   </div>
   <dialog id="settings-dialog" aria-labelledby="settings-title" aria-describedby="settings-description"><form id="settings-form">
     <div class="dialog-heading"><div><h2 id="settings-title">偏好设置</h2><p id="settings-description">文件处理方式和桌面宠物</p></div><button type="button" class="icon-button" id="close-settings" aria-label="关闭设置" autofocus>${icon('close')}</button></div>
